@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Live Chat Frontend</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <main class="shell">
+    <section class="panel">
+      <header class="topbar">
+        <div>
+          <h1>Live Chat</h1>
+          <p>Connect to Spring Boot websocket backend</p>
+        </div>
+        <div class="badge" id="statusBadge">Disconnected</div>
+      </header>
+
+      <section class="controls">
+        <input id="usernameInput" placeholder="Username" autocomplete="off" />
+        <input id="messageInput" placeholder="Type a message..." autocomplete="off" disabled />
+        <button id="connectBtn">Connect</button>
+        <button id="sendBtn" disabled>Send</button>
+        <button id="leaveBtn" disabled>Leave</button>
+      </section>
+
+      <section id="messages" class="messages" aria-live="polite"></section>
+    </section>
+  </main>
+
+  <script src="./app.js"></script>
+</body>
+</html>
