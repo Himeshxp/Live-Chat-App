@@ -1,6 +1,7 @@
 package com.project.livechat.config;
 
 import com.project.livechat.chat.ChatMessage;
+import com.project.livechat.chat.ChatService;
 import com.project.livechat.chat.MessageType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -13,14 +14,14 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.socket.messaging.SessionConnectedEvent;
 import org.springframework.web.socket.messaging.SessionDisconnectEvent;
 
+@RequiredArgsConstructor
 @Component
 @Slf4j
 public class WebSocketEventListener {
     private final SimpMessageSendingOperations messagetemplate;
+    private final ChatService chatService;
 
-    public WebSocketEventListener(SimpMessageSendingOperations messagetemplate) {
-        this.messagetemplate = messagetemplate;
-    }
+
 
     @EventListener
     public void handleWebSocketConnectListener(SessionDisconnectEvent event) {
@@ -28,11 +29,14 @@ public class WebSocketEventListener {
         String username= (String) accessor.getSessionAttributes().get("username");
         if(username!=null){
             log.info("user disconnected from {}",username);
-            var chatmessage= ChatMessage.builder()
+            ChatMessage chatmessage= ChatMessage.builder()
                     .type(MessageType.LEAVE)
                     .sender(username)
                     .build();
             messagetemplate.convertAndSend("/topic/public",chatmessage);
+            chatService.save(chatmessage);
         }
+
+
     }
 }

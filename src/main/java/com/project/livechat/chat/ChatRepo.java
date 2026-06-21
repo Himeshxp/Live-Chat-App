@@ -6,4 +6,5 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface ChatRepo extends CrudRepository<ChatMessage,Long> {
 
+    void deleteById(Integer id);
 }
