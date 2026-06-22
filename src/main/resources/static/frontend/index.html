@@ -7,6 +7,15 @@
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
+  <div class="join-overlay" id="joinOverlay" aria-modal="true" role="dialog">
+    <form class="join-card" id="joinForm">
+      <h2>Enter your name</h2>
+      <p>Pick a display name to join the chat.</p>
+      <input id="joinNameInput" placeholder="Your name" autocomplete="off" maxlength="32" />
+      <button type="submit">Join chat</button>
+    </form>
+  </div>
+
   <main class="shell">
     <section class="panel">
       <header class="topbar">
@@ -14,18 +23,18 @@
           <h1>Live Chat</h1>
           <p>Connect to Spring Boot websocket backend</p>
         </div>
-        <div class="badge" id="statusBadge">Disconnected</div>
+        <div class="topbar-actions">
+          <div class="badge" id="statusBadge">Disconnected</div>
+          <button id="leaveBtn" class="ghost-btn" disabled>Disconnect</button>
+        </div>
       </header>
 
-      <section class="controls">
-        <input id="usernameInput" placeholder="Username" autocomplete="off" />
-        <input id="messageInput" placeholder="Type a message..." autocomplete="off" disabled />
-        <button id="connectBtn">Connect</button>
-        <button id="sendBtn" disabled>Send</button>
-        <button id="leaveBtn" disabled>Leave</button>
-      </section>
-
       <section id="messages" class="messages" aria-live="polite"></section>
+
+      <form class="composer" id="composerForm">
+        <input id="messageInput" placeholder="Type a message..." autocomplete="off" disabled />
+        <button id="sendBtn" type="submit" disabled>Send</button>
+      </form>
     </section>
   </main>
 

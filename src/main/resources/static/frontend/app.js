@@ -1,10 +1,12 @@
 (function () {
   const BACKEND_WS_URL = "ws://localhost:8080/ws/websocket";
-  const usernameInput = document.getElementById("usernameInput");
+  const joinOverlay = document.getElementById("joinOverlay");
+  const joinForm = document.getElementById("joinForm");
+  const joinNameInput = document.getElementById("joinNameInput");
   const messageInput = document.getElementById("messageInput");
-  const connectBtn = document.getElementById("connectBtn");
   const sendBtn = document.getElementById("sendBtn");
   const leaveBtn = document.getElementById("leaveBtn");
+  const composerForm = document.getElementById("composerForm");
   const messages = document.getElementById("messages");
   const statusBadge = document.getElementById("statusBadge");
 
@@ -14,40 +16,66 @@
   let buffer = "";
   let heartbeatTimer = null;
   let manualClose = false;
+  let connecting = false;
+  let disconnecting = false;
 
   function setStatus(text, tone) {
     statusBadge.textContent = text;
     statusBadge.style.background =
       tone === "ok"
-        ? "rgba(22, 163, 74, 0.15)"
+        ? "rgba(34, 197, 94, 0.14)"
         : tone === "warn"
-          ? "rgba(245, 158, 11, 0.15)"
-          : "rgba(37, 99, 235, 0.15)";
+          ? "rgba(245, 158, 11, 0.14)"
+          : "rgba(20, 184, 166, 0.14)";
     statusBadge.style.borderColor =
       tone === "ok"
-        ? "rgba(22, 163, 74, 0.45)"
+        ? "rgba(34, 197, 94, 0.4)"
         : tone === "warn"
-          ? "rgba(245, 158, 11, 0.45)"
-          : "rgba(37, 99, 235, 0.45)";
+          ? "rgba(245, 158, 11, 0.4)"
+          : "rgba(20, 184, 166, 0.4)";
     statusBadge.style.color =
       tone === "ok"
-        ? "#bbf7d0"
+        ? "#dcfce7"
         : tone === "warn"
           ? "#fde68a"
-          : "#bfdbfe";
+          : "#ccfbf1";
   }
 
   function setConnected(state) {
     connected = state;
-    connectBtn.disabled = state;
     sendBtn.disabled = !state;
     leaveBtn.disabled = !state;
     messageInput.disabled = !state;
-    usernameInput.disabled = state;
     setStatus(state ? `Connected as ${currentUser}` : "Disconnected", state ? "ok" : "warn");
   }
 
-  function appendMessage({ sender = "System", content = "", type = "SYSTEM" }, mine = false) {
+  function showJoinOverlay(prefill = "") {
+    joinOverlay.hidden = false;
+    document.body.classList.add("is-locked");
+    joinNameInput.value = prefill;
+    joinNameInput.focus();
+    joinNameInput.select();
+    connecting = false;
+  }
+
+  function hideJoinOverlay() {
+    joinOverlay.hidden = true;
+    document.body.classList.remove("is-locked");
+  }
+
+  function formatTimestamp(timestamp) {
+    if (!timestamp) return "";
+
+    const date = new Date(timestamp);
+    if (Number.isNaN(date.getTime())) return "";
+
+    return date.toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit"
+    });
+  }
+
+  function appendMessage({ sender = "System", content = "", type = "SYSTEM", timestamp = "" }, mine = false) {
     const node = document.createElement("article");
     node.className = `msg ${mine ? "me" : ""} ${type === "JOIN" || type === "LEAVE" ? "system" : ""}`;
 
@@ -61,6 +89,14 @@
 
     node.appendChild(senderEl);
     node.appendChild(textEl);
+
+    const timeEl = document.createElement("div");
+    timeEl.className = "timestamp";
+    timeEl.textContent = formatTimestamp(timestamp);
+    if (timeEl.textContent) {
+      node.appendChild(timeEl);
+    }
+
     messages.appendChild(node);
     messages.scrollTop = messages.scrollHeight;
   }
@@ -113,6 +149,7 @@
 
     if (command === "CONNECTED") {
       setConnected(true);
+      hideJoinOverlay();
       setStatus(`Connected as ${currentUser}`, "ok");
       startHeartbeat();
 
@@ -150,12 +187,7 @@
     }
 
     if (command === "ERROR") {
-      appendMessage({
-        sender: "System",
-        content: "Connection error from backend.",
-        type: "SYSTEM"
-      });
-      disconnect(false);
+      disconnect(false, "Internet disconnected.");
     }
   }
 
@@ -176,24 +208,27 @@
   }
 
   function connect() {
-    const username = usernameInput.value.trim();
+    const username = joinNameInput.value.trim();
     if (!username) {
       alert("Please enter a username.");
       return;
     }
 
     currentUser = username;
+    connecting = true;
     setStatus("Connecting...", "warn");
+    hideJoinOverlay();
 
     try {
       socket = new WebSocket(BACKEND_WS_URL);
     } catch (error) {
       appendMessage({
         sender: "System",
-        content: "WebSocket could not be created.",
+        content: "Internet disconnected.",
         type: "SYSTEM"
       });
-      setConnected(false);
+      connecting = false;
+      setStatus("Disconnected", "warn");
       return;
     }
 
@@ -209,16 +244,11 @@
     };
 
     socket.onerror = () => {
-      appendMessage({
-        sender: "System",
-        content: "Unable to reach backend websocket.",
-        type: "SYSTEM"
-      });
-      disconnect(false);
+      disconnect(false, "Internet disconnected.");
     };
 
     socket.onclose = () => {
-      disconnect(false);
+      disconnect(false, "Internet disconnected.");
     };
   }
 
@@ -239,8 +269,11 @@
     messageInput.focus();
   }
 
-  function disconnect(sendFrameOnClose = true) {
+  function disconnect(sendFrameOnClose = true, statusMessage = "") {
+    if (disconnecting) return;
+    disconnecting = true;
     stopHeartbeat();
+    connecting = false;
 
     if (socket) {
       if (sendFrameOnClose) {
@@ -265,38 +298,37 @@
       socket = null;
     }
 
-    if (connected && !manualClose) {
+    if (!manualClose && statusMessage) {
       appendMessage({
         sender: "System",
-        content: "Disconnected from chat.",
+        content: statusMessage,
         type: "SYSTEM"
       });
     }
 
     manualClose = false;
     setConnected(false);
+    disconnecting = false;
   }
 
-  connectBtn.addEventListener("click", connect);
-  sendBtn.addEventListener("click", sendMessage);
+  joinForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    if (connecting || connected) return;
+    connect();
+  });
+
+  composerForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    sendMessage();
+  });
+
   leaveBtn.addEventListener("click", () => disconnect(true));
 
-  messageInput.addEventListener("keydown", (event) => {
-    if (event.key === "Enter") {
-      sendMessage();
-    }
-  });
-
-  usernameInput.addEventListener("keydown", (event) => {
-    if (event.key === "Enter") {
-      connect();
-    }
-  });
-
   setStatus("Disconnected", "warn");
+  showJoinOverlay();
   appendMessage({
     sender: "System",
-    content: "Enter a username and click Connect.",
+    content: "Enter a username to join the chat.",
     type: "SYSTEM"
   });
 })();
