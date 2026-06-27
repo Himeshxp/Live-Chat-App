@@ -7,12 +7,23 @@
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
-  <div class="join-overlay" id="joinOverlay" aria-modal="true" role="dialog">
-    <form class="join-card" id="joinForm">
-      <h2>Enter your name</h2>
-      <p>Pick a display name to join the chat.</p>
-      <input id="joinNameInput" placeholder="Your name" autocomplete="off" maxlength="32" />
-      <button type="submit">Join chat</button>
+  <div class="auth-overlay" id="authOverlay" aria-modal="true" role="dialog">
+    <form class="auth-card" id="authForm">
+      <h2>Live Chat</h2>
+      <p>Log in or create an account to join the room.</p>
+
+      <div class="auth-tabs" role="tablist" aria-label="Authentication mode">
+        <button type="button" class="auth-tab is-active" data-mode="login">Login</button>
+        <button type="button" class="auth-tab" data-mode="register">Register</button>
+      </div>
+
+      <input id="usernameInput" class="auth-field auth-register-only" placeholder="Username" autocomplete="username" maxlength="32" />
+      <input id="emailInput" class="auth-field" placeholder="Email" autocomplete="email" />
+      <input id="passwordInput" class="auth-field" type="password" placeholder="Password" autocomplete="current-password" />
+
+      <p class="auth-status" id="authStatus" aria-live="polite"></p>
+
+      <button type="submit" id="authSubmitBtn">Login</button>
     </form>
   </div>
 
@@ -38,6 +49,6 @@
     </section>
   </main>
 
-  <script src="./app.js"></script>
+  <script src="./app.js?v=auth-fix-1"></script>
 </body>
 </html>

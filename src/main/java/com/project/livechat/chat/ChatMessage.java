@@ -1,5 +1,6 @@
 package com.project.livechat.chat;
 
+import com.project.livechat.entity.User;
 import jakarta.persistence.*;
 import lombok.*;
 import org.springframework.data.annotation.CreatedDate;
@@ -23,7 +24,9 @@ public class ChatMessage {
     @Enumerated(EnumType.STRING)
     private MessageType type;
     private String content;
-    private String sender;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "sender_id",nullable = false)
+    private User sender;
     @CreatedDate
     private Instant timestamp;
 

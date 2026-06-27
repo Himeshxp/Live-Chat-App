@@ -1,8 +1,11 @@
 package com.project.livechat.config;
 
 import com.project.livechat.chat.ChatMessage;
+import com.project.livechat.chat.ChatMessageResponseDTO;
 import com.project.livechat.chat.ChatService;
 import com.project.livechat.chat.MessageType;
+import com.project.livechat.entity.User;
+import com.project.livechat.entity.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
@@ -17,6 +20,7 @@ import org.springframework.web.socket.messaging.SessionDisconnectEvent;
 public class WebSocketEventListener {
     private final SimpMessageSendingOperations messagetemplate;
     private final ChatService chatService;
+    private final UserRepository userRepository;
 
 
 
@@ -26,12 +30,20 @@ public class WebSocketEventListener {
         String username= (String) accessor.getSessionAttributes().get("username");
         if(username!=null){
             log.info("user disconnected from {}",username);
+            User sender = userRepository.findByUsername(username).orElse(null);
+            if(sender == null){
+                sender = userRepository.findByEmail(username).orElse(null);
+            }
+            if(sender == null){
+                return;
+            }
             ChatMessage chatmessage= ChatMessage.builder()
                     .type(MessageType.LEAVE)
-                    .sender(username)
+                    .sender(sender)
                     .build();
-            messagetemplate.convertAndSend("/topic/public",chatmessage);
-            chatService.save(chatmessage);
+            ChatMessage saved = chatService.save(chatmessage);
+            messagetemplate.convertAndSend("/topic/public",
+                    new ChatMessageResponseDTO(username, saved.getContent(), saved.getType(), saved.getTimestamp()));
         }
 
 

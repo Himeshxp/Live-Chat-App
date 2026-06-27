@@ -40,7 +40,7 @@ body.is-locked {
   overflow: hidden;
 }
 
-.join-overlay {
+.auth-overlay {
   position: fixed;
   inset: 0;
   display: grid;
@@ -51,11 +51,11 @@ body.is-locked {
   padding: 24px;
 }
 
-.join-overlay[hidden] {
+.auth-overlay[hidden] {
   display: none !important;
 }
 
-.join-card {
+.auth-card {
   width: min(420px, 100%);
   padding: 28px;
   border-radius: 18px;
@@ -64,19 +64,19 @@ body.is-locked {
   box-shadow: var(--shadow);
 }
 
-.join-card h2 {
+.auth-card h2 {
   margin: 0;
   font-size: 24px;
   line-height: 1.2;
 }
 
-.join-card p {
+.auth-card p {
   margin: 8px 0 20px;
   color: var(--muted);
   font-size: 14px;
 }
 
-.join-card input,
+.auth-field,
 .composer input {
   width: 100%;
   min-height: 48px;
@@ -89,18 +89,18 @@ body.is-locked {
   outline: none;
 }
 
-.join-card input::placeholder,
+.auth-field::placeholder,
 .composer input::placeholder {
   color: #788696;
 }
 
-.join-card input:focus,
+.auth-field:focus,
 .composer input:focus {
   border-color: var(--accent-strong);
   box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.12);
 }
 
-.join-card button,
+.auth-card button,
 .composer button,
 .ghost-btn {
   min-height: 44px;
@@ -112,7 +112,7 @@ body.is-locked {
   transition: background 140ms ease, border-color 140ms ease, transform 140ms ease, opacity 140ms ease;
 }
 
-.join-card button,
+.auth-card button,
 .composer button {
   background: linear-gradient(180deg, #18c0af, #139b8f);
   color: #04110f;
@@ -120,9 +120,41 @@ body.is-locked {
   margin-top: 14px;
 }
 
-.join-card button:hover,
+.auth-card button:hover,
 .composer button:hover {
   transform: translateY(-1px);
+}
+
+.auth-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.auth-tab {
+  margin-top: 0;
+  background: transparent;
+  color: var(--muted);
+  border-color: var(--line-strong);
+  font-weight: 700;
+}
+
+.auth-tab.is-active {
+  background: rgba(20, 184, 166, 0.12);
+  color: var(--text);
+  border-color: rgba(20, 184, 166, 0.28);
+}
+
+.auth-register-only[hidden] {
+  display: none !important;
+}
+
+.auth-status {
+  min-height: 18px;
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: var(--muted);
 }
 
 .shell {
@@ -226,6 +258,10 @@ body.is-locked {
   border-color: rgba(20, 184, 166, 0.28);
 }
 
+.sender-username {
+  font-weight: 700;
+}
+
 .msg.system {
   max-width: 100%;
   background: rgba(226, 163, 107, 0.11);
@@ -288,5 +324,9 @@ body.is-locked {
 
   .composer button {
     width: 100%;
+  }
+
+  .auth-card {
+    padding: 24px;
   }
 }
