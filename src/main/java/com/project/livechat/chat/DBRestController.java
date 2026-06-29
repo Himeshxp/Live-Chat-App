@@ -20,9 +20,6 @@ public class DBRestController {
     }
 
 
-    @GetMapping
-    public List<ChatMessage> findAll() {
-        return chatService.findAll();
-    }
+
 
 }

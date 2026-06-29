@@ -247,13 +247,15 @@
         const response = await fetch(`${API_BASE}/api/auth/login?${params.toString()}`, {
           method: "POST"
         });
-        const result = (await response.text()).trim();
+        const result = await response.json();
 
-        if (result !== "Login Successful") {
-          throw new Error(result || "Login failed.");
+        if (!response.ok || result.message !== "Login Successful") {
+          throw new Error(result.message || "Login failed.");
         }
 
-        setCurrentUser(getKnownUserName(email) || email);
+        const username = result.username || getKnownUserName(email) || email;
+        setCurrentUser(username);
+        rememberUserName(email, username);
         setAuthStatus("Login Successful", "ok");
       } else {
         const response = await fetch(`${API_BASE}/api/auth/register`, {
@@ -283,9 +285,40 @@
       }
 
       hideAuthOverlay();
+      await loadMessages();
       connect();
     } catch (error) {
       setAuthStatus(error.message || "Could not reach backend.", "error");
+    }
+  }
+  async function loadMessages() {
+    try {
+      const response = await fetch(`${API_BASE}/api/chat/messages`);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || `Couldn't load messages (${response.status})`);
+      }
+
+      const history = await response.json();
+
+      messages.innerHTML = "";
+
+      if (!Array.isArray(history) || history.length === 0) {
+        return;
+      }
+
+      history.forEach((message) => {
+        const mine = getSenderName(message.sender) === currentUser;
+        appendMessage(message, mine);
+      });
+    } catch (error) {
+      console.error("Failed to load chat history:", error);
+      appendMessage({
+        sender: "System",
+        content: "Could not load chat history. New messages will still appear.",
+        type: "SYSTEM"
+      });
     }
   }
 

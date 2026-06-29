@@ -2,7 +2,7 @@ package com.project.livechat.chat;
 
 
 public record ChatMessageRequestDTO(
-    String senderName,
+    String sender,
     String content,
     MessageType type
 ) {

@@ -8,6 +8,9 @@ import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.messaging.handler.annotation.SendTo;
 import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
 import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.GetMapping;
+
+import java.util.List;
 
 @RequiredArgsConstructor
 @Controller
@@ -20,11 +23,11 @@ public class ChatController {
     @SendTo("/topic/public")
     public ChatMessageResponseDTO sendMessage(@Payload ChatMessageRequestDTO message) {
         ChatMessage chatMessage = ChatMessage.builder()
-                .sender(resolveUser(message.senderName()))
+                .sender(resolveUser(message.sender()))
                 .content(message.content())
                 .type(message.type() == null ? MessageType.CHAT : message.type())
                 .build();
-        ChatMessage saved = chatService.save(chatMessage);
+        ChatMessage saved = chatService.saveChatMessage(chatMessage);
 
         return new ChatMessageResponseDTO(
                 saved.getSender().getUsername(),
@@ -41,14 +44,16 @@ public class ChatController {
             @Payload ChatMessageRequestDTO message,
             SimpMessageHeaderAccessor headerAccessor
     ){
-        String username = message.senderName();
+        String username = message.sender();
+        // log check
+        System.out.println(headerAccessor.getSessionAttributes());
         headerAccessor.getSessionAttributes().put("username", username);
 
         ChatMessage chatMessage = ChatMessage.builder()
                 .sender(resolveUser(username))
                 .type(MessageType.JOIN)
                 .build();
-        ChatMessage saved = chatService.save(chatMessage);
+        ChatMessage saved = chatService.saveChatMessage(chatMessage);
         return new ChatMessageResponseDTO(
                 saved.getSender().getUsername(),
                 saved.getContent(),
@@ -63,5 +68,6 @@ public class ChatController {
                 .or(() -> userRepository.findByEmail(username))
                 .orElseThrow(() -> new IllegalArgumentException("Unknown user: " + username));
     }
+
 
 }
