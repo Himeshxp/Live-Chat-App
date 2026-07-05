@@ -5,9 +5,11 @@ import java.time.Instant;
 
 public record ChatMessageResponseDTO(
        String sender,
+        String senderPublicId,
         String content,
         MessageType type,
-        Instant timestamp
+        Instant timestamp,
+        Integer conversationId
 ) {
 
 }

@@ -13,4 +13,7 @@ public interface ChatRepo extends JpaRepository<ChatMessage,Integer> {
 
     @EntityGraph(attributePaths = "sender")
     List<ChatMessage> findTop100ByOrderByTimestampAsc();
+
+    @EntityGraph(attributePaths = "sender")
+    List<ChatMessage> findByConversationIdOrderByTimestampAsc(Integer conversationId);
 }

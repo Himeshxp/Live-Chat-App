@@ -34,16 +34,30 @@ public class ChatService {
     }
 
     @Transactional(readOnly = true)
+    public List<ChatMessageResponseDTO> getMessagesForConversation(Integer conversationId) {
+        return repo.findByConversationIdOrderByTimestampAsc(conversationId)
+                .stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
     public List<ChatMessageResponseDTO> getMessageHistory() {
         return repo.findTop100ByOrderByTimestampAsc()
                 .stream()
-                .map(message -> new ChatMessageResponseDTO(
-                        message.getSender() == null ? "Unknown" : message.getSender().getUsername(),
-                        message.getContent(),
-                        message.getType() == null ? MessageType.CHAT : message.getType(),
-                        message.getTimestamp()
-                ))
+                .map(this::toResponse)
                 .toList();
+    }
+
+    public ChatMessageResponseDTO toResponse(ChatMessage message) {
+        return new ChatMessageResponseDTO(
+                message.getSender() == null ? "Unknown" : message.getSender().getUsername(),
+                message.getSender() == null ? null : message.getSender().getPublicId(),
+                message.getContent(),
+                message.getType() == null ? MessageType.CHAT : message.getType(),
+                message.getTimestamp(),
+                message.getConversation() == null ? null : message.getConversation().getId()
+        );
     }
 
 }

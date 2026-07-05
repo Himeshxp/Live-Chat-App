@@ -10,7 +10,7 @@
   <div class="auth-overlay" id="authOverlay" aria-modal="true" role="dialog">
     <form class="auth-card" id="authForm">
       <h2>Live Chat</h2>
-      <p>Log in or create an account to join the room.</p>
+      <p>Log in or create an account to message people directly.</p>
 
       <div class="auth-tabs" role="tablist" aria-label="Authentication mode">
         <button type="button" class="auth-tab is-active" data-mode="login">Login</button>
@@ -29,10 +29,32 @@
 
   <main class="shell">
     <section class="panel">
+      <aside class="sidebar">
+        <div class="profile-strip">
+          <div>
+            <span class="eyebrow">Signed in</span>
+            <strong id="profileName">Not connected</strong>
+          </div>
+          <code id="profilePublicId">--------</code>
+        </div>
+
+        <form class="search-box" id="userSearchForm">
+          <input id="publicIdSearchInput" placeholder="Search public ID" autocomplete="off" maxlength="10" />
+          <button id="userSearchBtn" type="submit">Find</button>
+        </form>
+        <p class="search-status" id="userSearchStatus" aria-live="polite"></p>
+
+        <div class="conversation-header">
+          <h2>Chats</h2>
+        </div>
+        <div class="conversation-list" id="conversationList"></div>
+      </aside>
+
+      <div class="chat-column">
       <header class="topbar">
         <div>
-          <h1>Live Chat</h1>
-          <p>Connect to Spring Boot websocket backend</p>
+          <h1 id="chatTitle">Select a chat</h1>
+          <p id="chatSubtitle">Search a public ID or choose a conversation.</p>
         </div>
         <div class="topbar-actions">
           <div class="badge" id="statusBadge">Disconnected</div>
@@ -46,6 +68,7 @@
         <input id="messageInput" placeholder="Type a message..." autocomplete="off" disabled />
         <button id="sendBtn" type="submit" disabled>Send</button>
       </form>
+      </div>
     </section>
   </main>
 

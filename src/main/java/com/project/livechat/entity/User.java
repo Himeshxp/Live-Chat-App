@@ -32,6 +32,10 @@ public class User {
     @Email
     @Column(unique = true)
     private String email;
+
+    @Column(unique = true, length = 10)
+    private String publicId;
+
     private String password;
 
     @OneToMany(mappedBy = "sender")
