@@ -1,25 +1,21 @@
 package com.project.livechat.chat;
 
-
 import lombok.RequiredArgsConstructor;
-import org.springframework.messaging.handler.annotation.MessageMapping;
-import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
-
-@RequiredArgsConstructor
+/**
+ * Internal utility endpoint for message management.
+ * Currently exposes a delete-by-ID operation for admin/debug use.
+ */
 @RestController
 @RequestMapping("/db")
+@RequiredArgsConstructor
 public class DBRestController {
-    public final ChatService chatService;
+
+    private final ChatService chatService;
 
     @DeleteMapping("/{id}")
-    public void deleteById(@PathVariable Integer messageid) {
-       chatService.deleteById(messageid);
+    public void deleteById(@PathVariable Integer id) {
+        chatService.deleteById(id);
     }
-
-
-
-
 }

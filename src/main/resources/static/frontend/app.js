@@ -1,551 +1,243 @@
+/* Aura Chat v5 */
+'use strict';
 (function () {
-  const backendOrigin = "http://localhost:8080";
-  const API_BASE = backendOrigin;
-  const WS_URL = `${backendOrigin.replace(/^http/, "ws")}/ws/websocket`;
 
-  const authOverlay = document.getElementById("authOverlay");
-  const authForm = document.getElementById("authForm");
-  const authTabs = Array.from(document.querySelectorAll(".auth-tab"));
-  const usernameInput = document.getElementById("usernameInput");
-  const emailInput = document.getElementById("emailInput");
-  const passwordInput = document.getElementById("passwordInput");
-  const authStatus = document.getElementById("authStatus");
-  const authSubmitBtn = document.getElementById("authSubmitBtn");
+  const API = 'http://localhost:8080';
+  const WS  = API.replace(/^http/, 'ws') + '/ws/websocket';
 
-  const profileName = document.getElementById("profileName");
-  const profilePublicId = document.getElementById("profilePublicId");
-  const userSearchForm = document.getElementById("userSearchForm");
-  const publicIdSearchInput = document.getElementById("publicIdSearchInput");
-  const userSearchStatus = document.getElementById("userSearchStatus");
-  const conversationList = document.getElementById("conversationList");
-  const chatTitle = document.getElementById("chatTitle");
-  const chatSubtitle = document.getElementById("chatSubtitle");
+  const $  = id => document.getElementById(id);
+  const authScreen    = $('authScreen'),   appShell     = $('appShell');
+  const authForm      = $('authForm');
+  const authTabs      = [...document.querySelectorAll('.auth-tab')];
+  const usernameGroup = $('usernameGroup'),usernameInput= $('usernameInput');
+  const emailInput    = $('emailInput'),   passwordInput= $('passwordInput');
+  const authStatus    = $('authStatus'),   authSubmitBtn= $('authSubmitBtn');
+  const authBtnLabel  = $('authBtnLabel'), authSpinner  = $('authSpinner');
+  const profileAvatar = $('profileAvatar'),profileAvatarIni=$('profileAvatarInitial');
+  const profileName   = $('profileName'), profilePublicId  =$('profilePublicId');
+  const connectionDot = $('connectionDot'),leaveBtn        =$('leaveBtn');
+  const profileModal  = $('profileModal'),openProfileBtn   =$('openProfileModal');
+  const closeProfileBtn=$('closeProfileModal'),cancelProfileBtn=$('cancelProfileBtn');
+  const saveProfileBtn=$('saveProfileBtn'),saveBtnLabel    =$('saveBtnLabel');
+  const saveSpinner   =$('saveSpinner'),  profileSaveHint  =$('profileSaveHint');
+  const modalAvatar   =$('modalAvatar'),  modalAvatarIni   =$('modalAvatarInitial');
+  const profileUsernameInput=$('profileUsernameInput'),colorSwatches=$('colorSwatches');
+  const userSearchForm=$('userSearchForm'),searchInput     =$('publicIdSearchInput');
+  const searchHint    =$('userSearchStatus'),convList      =$('conversationList');
+  const chatAvatar    =$('chatAvatar'),   chatAvatarIni    =$('chatAvatarInitial');
+  const chatTitle     =$('chatTitle'),    chatSubtitle     =$('chatSubtitle');
+  const statusBadge   =$('statusBadge'), statusText        =$('statusText');
+  const messagesPane  =$('messages'),    emptyState        =$('emptyState');
+  const composerForm  =$('composerForm'),textarea          =$('messageInput');
+  const sendBtn       =$('sendBtn'),     toastContainer    =$('toastContainer');
 
-  const messageInput = document.getElementById("messageInput");
-  const sendBtn = document.getElementById("sendBtn");
-  const leaveBtn = document.getElementById("leaveBtn");
-  const composerForm = document.getElementById("composerForm");
-  const messages = document.getElementById("messages");
-  const statusBadge = document.getElementById("statusBadge");
+  let me={username:'',publicId:'',avatarColor:null},authMode='login';
+  let conversations=[],active=null,activeSub=null,convSub=null;
+  let socket=null,connected=false,connecting=false,disconnecting=false,manualClose=false;
+  let heartbeat=null,stompBuffer='',lastMsgDate=null,lastSenderId=null,pendingColor=null;
 
-  let socket = null;
-  let connected = false;
-  let currentUser = "";
-  let currentUserPublicId = "";
-  let conversations = [];
-  let activeConversation = null;
-  let activeSubscriptionId = null;
-  let userConversationSubscriptionId = null;
-  let buffer = "";
-  let heartbeatTimer = null;
-  let manualClose = false;
-  let connecting = false;
-  let disconnecting = false;
-  let authMode = "login";
+  const initial  = n => (n||'?').charAt(0).toUpperCase();
+  const escHtml  = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  function isLightColor(h){if(!h||h.length<7)return false;const r=parseInt(h.slice(1,3),16),g=parseInt(h.slice(3,5),16),b=parseInt(h.slice(5,7),16);return(r*299+g*587+b*114)/1000>128;}
+  function applyAvatarColor(el,c){if(c){el.style.background=c;el.style.borderColor='transparent';el.style.color=isLightColor(c)?'#13151A':'#F0F2F5';}else{el.style.background=el.style.borderColor=el.style.color='';}}
 
-  function setStatus(text, tone) {
-    statusBadge.textContent = text;
-    statusBadge.style.background =
-      tone === "ok" ? "rgba(34, 197, 94, 0.14)" :
-      tone === "warn" ? "rgba(245, 158, 11, 0.14)" :
-      tone === "error" ? "rgba(239, 68, 68, 0.14)" : "rgba(20, 184, 166, 0.14)";
-    statusBadge.style.borderColor =
-      tone === "ok" ? "rgba(34, 197, 94, 0.4)" :
-      tone === "warn" ? "rgba(245, 158, 11, 0.4)" :
-      tone === "error" ? "rgba(239, 68, 68, 0.4)" : "rgba(20, 184, 166, 0.4)";
-    statusBadge.style.color =
-      tone === "ok" ? "#dcfce7" :
-      tone === "warn" ? "#fde68a" :
-      tone === "error" ? "#fecaca" : "#ccfbf1";
+  function toast(msg,type='ok',ms=3000){const el=document.createElement('div');el.className=`toast toast--${type}`;el.innerHTML=`<div class="toast-dot"></div><span>${escHtml(msg)}</span>`;toastContainer.appendChild(el);const d=()=>{el.classList.add('is-out');el.addEventListener('animationend',()=>el.remove(),{once:true});};setTimeout(d,ms);el.addEventListener('click',d);}
+
+  function saveSession(t,u,p,c){localStorage.setItem('aura.token',t||'');localStorage.setItem('aura.username',u||'');localStorage.setItem('aura.publicId',p||'');localStorage.setItem('aura.avatarColor',c||'');}
+  function clearSession(){['aura.token','aura.username','aura.publicId','aura.avatarColor'].forEach(k=>localStorage.removeItem(k));}
+  function getToken(){return localStorage.getItem('aura.token')||'';}
+  function authFetch(url,opts={}){opts.headers={'Authorization':`Bearer ${getToken()}`,...(opts.headers||{})};return fetch(url,opts);}
+
+  function applyMe(u,p,c){me={username:u,publicId:p||'',avatarColor:c||null};profileName.textContent=u;profilePublicId.textContent=p||'--------';profileAvatarIni.textContent=initial(u);applyAvatarColor(profileAvatar,c);}
+
+  function setStatus(l,s){statusText.textContent=l;statusBadge.className='conn-badge'+(s==='ok'?' is-ok':s==='err'?' is-err':'');connectionDot.classList.toggle('is-on',s==='ok');}
+
+  function showApp(){authScreen.hidden=true;appShell.hidden=false;}
+  function showAuth(){appShell.hidden=true;authScreen.hidden=false;emailInput.value='';passwordInput.value='';usernameInput.value='';setAuthMode('login');setTimeout(()=>emailInput.focus(),60);}
+
+  function setAuthHint(m,t=''){authStatus.textContent=m;authStatus.className='auth-hint'+(t?' is-'+t:'');}
+  function setAuthMode(mode){
+    authMode=mode;
+    authTabs.forEach(t=>{const on=t.dataset.mode===mode;t.classList.toggle('is-active',on);t.setAttribute('aria-selected',String(on));});
+    usernameGroup.hidden=mode!=='register';
+    usernameInput.disabled=mode!=='register';
+    passwordInput.autocomplete=mode==='register'?'new-password':'current-password';
+    authBtnLabel.textContent=mode==='register'?'Create account':'Sign in';
+    setAuthHint('');
   }
+  authTabs.forEach(t=>t.addEventListener('click',()=>setAuthMode(t.dataset.mode)));
+  authForm.addEventListener('submit',e=>{e.preventDefault();doAuth();});
 
-  function setAuthStatus(text, tone = "muted") {
-    authStatus.textContent = text;
-    authStatus.style.color = tone === "error" ? "#fecaca" : tone === "ok" ? "#dcfce7" : "#91a0b1";
-  }
-
-  function setSearchStatus(text, tone = "muted") {
-    userSearchStatus.textContent = text;
-    userSearchStatus.style.color = tone === "error" ? "#fecaca" : tone === "ok" ? "#dcfce7" : "#91a0b1";
-  }
-
-  function setAuthMode(mode) {
-    authMode = mode;
-    authTabs.forEach((button) => button.classList.toggle("is-active", button.dataset.mode === mode));
-    const registerMode = mode === "register";
-    usernameInput.hidden = !registerMode;
-    usernameInput.required = registerMode;
-    usernameInput.disabled = !registerMode;
-    usernameInput.setAttribute("aria-hidden", String(!registerMode));
-    passwordInput.autocomplete = registerMode ? "new-password" : "current-password";
-    authSubmitBtn.textContent = registerMode ? "Register" : "Login";
-    setAuthStatus(registerMode ? "Create an account to message people." : "Use your account to continue.");
-  }
-
-  function showAuthOverlay() {
-    authOverlay.hidden = false;
-    document.body.classList.add("is-locked");
-    connecting = false;
-    (authMode === "register" ? usernameInput : emailInput).focus();
-  }
-
-  function hideAuthOverlay() {
-    authOverlay.hidden = true;
-    document.body.classList.remove("is-locked");
-  }
-
-  function setCurrentUser(username, publicId) {
-    currentUser = username;
-    currentUserPublicId = publicId || "";
-    localStorage.setItem("livechat.username", username);
-    localStorage.setItem("livechat.publicId", currentUserPublicId);
-    profileName.textContent = username;
-    profilePublicId.textContent = currentUserPublicId || "--------";
-  }
-
-  function formatTimestamp(timestamp) {
-    if (!timestamp) return "";
-    const date = new Date(timestamp);
-    if (Number.isNaN(date.getTime())) return "";
-    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  }
-
-  function getSenderName(sender) {
-    if (!sender) return "System";
-    if (typeof sender === "string") return sender;
-    return sender.username || sender.name || "System";
-  }
-
-  function getOtherParticipant(conversation) {
-    const firstIsMe = conversation.participant1PublicId === currentUserPublicId;
-    return {
-      username: firstIsMe ? conversation.participant2Username : conversation.participant1Username,
-      publicId: firstIsMe ? conversation.participant2PublicId : conversation.participant1PublicId
-    };
-  }
-
-  function appendMessage(message, mine = false) {
-    const senderName = getSenderName(message.sender);
-    const type = message.type || "SYSTEM";
-    const node = document.createElement("article");
-    node.className = `msg ${mine ? "me" : ""} ${type === "SYSTEM" ? "system" : ""}`;
-
-    const senderEl = document.createElement("div");
-    senderEl.className = "sender";
-    senderEl.textContent = senderName;
-
-    const textEl = document.createElement("div");
-    textEl.className = "text";
-    textEl.textContent = message.content || "";
-
-    node.appendChild(senderEl);
-    node.appendChild(textEl);
-
-    const timeEl = document.createElement("div");
-    timeEl.className = "timestamp";
-    timeEl.textContent = formatTimestamp(message.timestamp);
-    if (timeEl.textContent) node.appendChild(timeEl);
-
-    messages.appendChild(node);
-    messages.scrollTop = messages.scrollHeight;
-  }
-
-  function renderConversations() {
-    conversationList.innerHTML = "";
-    if (conversations.length === 0) {
-      const empty = document.createElement("div");
-      empty.className = "empty-state";
-      empty.textContent = "No conversations yet.";
-      conversationList.appendChild(empty);
-      return;
-    }
-
-    conversations.forEach((conversation) => {
-      const other = getOtherParticipant(conversation);
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "conversation-item";
-      button.classList.toggle("is-active", activeConversation && activeConversation.id === conversation.id);
-      button.innerHTML = `<strong></strong><span></span>`;
-      button.querySelector("strong").textContent = other.username;
-      button.querySelector("span").textContent = other.publicId;
-      button.addEventListener("click", () => selectConversation(conversation));
-      conversationList.appendChild(button);
-    });
-  }
-
-  function upsertConversation(conversation) {
-    const existingIndex = conversations.findIndex((item) => item.id === conversation.id);
-    if (existingIndex >= 0) {
-      conversations[existingIndex] = conversation;
-      return false;
-    }
-    conversations.unshift(conversation);
-    return true;
-  }
-
-  function escapeHeader(value) {
-    return String(value).replace(/\\/g, "\\\\").replace(/\r/g, "\\r").replace(/\n/g, "\\n").replace(/:/g, "\\c");
-  }
-
-  function buildFrame(command, headers = {}, body = "") {
-    const headerLines = Object.entries(headers).map(([key, value]) => `${key}:${escapeHeader(value)}`);
-    return `${command}\n${headerLines.join("\n")}\n\n${body}\u0000`;
-  }
-
-  function sendFrame(command, headers = {}, body = "") {
-    if (!socket || socket.readyState !== WebSocket.OPEN) return;
-    socket.send(buildFrame(command, headers, body));
-  }
-
-  function parseFrames(chunk) {
-    buffer += chunk;
-    const frames = [];
-    while (true) {
-      const index = buffer.indexOf("\u0000");
-      if (index === -1) break;
-      frames.push(buffer.slice(0, index));
-      buffer = buffer.slice(index + 1);
-    }
-    return frames;
-  }
-
-  function startHeartbeat() {
-    stopHeartbeat();
-    heartbeatTimer = setInterval(() => {
-      if (socket && socket.readyState === WebSocket.OPEN) socket.send("\n");
-    }, 10000);
-  }
-
-  function stopHeartbeat() {
-    if (heartbeatTimer) {
-      clearInterval(heartbeatTimer);
-      heartbeatTimer = null;
-    }
-  }
-
-  async function authenticate(mode) {
-    const email = emailInput.value.trim();
-    const password = passwordInput.value;
-    const username = usernameInput.value.trim();
-
-    if (mode === "register" && !username) {
-      setAuthStatus("Username is required for registration.", "error");
-      return;
-    }
-    if (!email || !password) {
-      setAuthStatus("Email and password are required.", "error");
-      return;
-    }
-
-    setAuthStatus(mode === "register" ? "Creating account..." : "Logging in...", "ok");
-
-    try {
-      if (mode === "login") {
-        const params = new URLSearchParams({ email, password });
-        const response = await fetch(`${API_BASE}/api/auth/login?${params.toString()}`, { method: "POST" });
-        const result = await response.json();
-        if (!response.ok || result.message !== "Login Successful") {
-          throw new Error(result.message || "Login failed.");
-        }
-        setCurrentUser(result.username || email, result.publicId);
-      } else {
-        const response = await fetch(`${API_BASE}/api/auth/register`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ username, email, password })
-        });
-        if (!response.ok) throw new Error("Register failed.");
-        const user = await response.json();
-        if (!user || !user.username) throw new Error("Register failed.");
-        setCurrentUser(user.username, user.publicId);
+  async function doAuth(){
+    const email=emailInput.value.trim(),password=passwordInput.value,username=usernameInput.value.trim();
+    if(authMode==='register'&&!username){setAuthHint('Username is required.','error');return;}
+    if(!email||!password){setAuthHint('Email and password are required.','error');return;}
+    authSubmitBtn.disabled=true;authSpinner.hidden=false;authBtnLabel.style.opacity='0.6';
+    setAuthHint(authMode==='register'?'Creating account...':'Signing in...');
+    try{
+      const ep=authMode==='register'?'register':'login';
+      const body=authMode==='register'?{username,email,password}:{email,password};
+      const res=await fetch(`${API}/api/auth/${ep}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      const data=await res.json();
+      if(!res.ok){
+        const m=data.fields?Object.values(data.fields).join(' '):(data.error||'Something went wrong.');
+        throw new Error(m);
       }
-
-      hideAuthOverlay();
-      messages.innerHTML = "";
-      appendMessage({ sender: "System", content: "Choose a conversation to start messaging.", type: "SYSTEM" });
+      if(!data.token||!data.username)throw new Error('Unexpected server response.');
+      saveSession(data.token,data.username,data.publicId,data.avatarColor);
+      applyMe(data.username,data.publicId,data.avatarColor);
+      showApp();
       await loadConversations();
       connect();
-    } catch (error) {
-      setAuthStatus(error.message || "Could not reach backend.", "error");
+    }catch(err){
+      setAuthHint(err.message,'error');
+    }finally{
+      authSubmitBtn.disabled=false;authSpinner.hidden=true;authBtnLabel.style.opacity='1';
     }
   }
 
-  async function loadConversations() {
-    const params = new URLSearchParams({ currentUser });
-    const response = await fetch(`${API_BASE}/api/conversations?${params.toString()}`);
-    if (!response.ok) throw new Error("Could not load conversations.");
-    conversations = await response.json();
-    renderConversations();
-  }
-
-  async function searchAndOpenConversation(publicId) {
-    const normalized = publicId.trim().toUpperCase();
-    if (!normalized) return;
-    if (normalized === currentUserPublicId) {
-      setSearchStatus("That is your own public ID.", "error");
-      return;
-    }
-
-    setSearchStatus("Searching...", "ok");
-    const userResponse = await fetch(`${API_BASE}/api/users/public/${encodeURIComponent(normalized)}`);
-    if (!userResponse.ok) {
-      setSearchStatus("No user found with that public ID.", "error");
-      return;
-    }
-
-    const createResponse = await fetch(`${API_BASE}/api/conversations`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ currentUser, otherPublicId: normalized })
-    });
-    if (!createResponse.ok) {
-      setSearchStatus("Could not open conversation.", "error");
-      return;
-    }
-
-    const conversation = await createResponse.json();
-    upsertConversation(conversation);
-    publicIdSearchInput.value = "";
-    setSearchStatus("Conversation opened.", "ok");
-    renderConversations();
-    await selectConversation(conversation);
-  }
-
-  async function loadMessages(conversationId) {
-    const response = await fetch(`${API_BASE}/api/chat/conversations/${conversationId}/messages`);
-    if (!response.ok) throw new Error(`Could not load messages (${response.status})`);
-    const history = await response.json();
-    messages.innerHTML = "";
-    if (!Array.isArray(history) || history.length === 0) return;
-    history.forEach((message) => {
-      appendMessage(message, message.senderPublicId === currentUserPublicId || getSenderName(message.sender) === currentUser);
-    });
-  }
-
-  async function selectConversation(conversation) {
-    activeConversation = conversation;
-    const other = getOtherParticipant(conversation);
-    chatTitle.textContent = other.username;
-    chatSubtitle.textContent = other.publicId;
-    renderConversations();
-    setComposerEnabled(false);
-
-    unsubscribeFromActiveConversation();
-    try {
-      await loadMessages(conversation.id);
-      subscribeToActiveConversation();
-      setComposerEnabled(connected);
-    } catch (error) {
-      console.error(error);
-      messages.innerHTML = "";
-      appendMessage({ sender: "System", content: "Could not load this conversation.", type: "SYSTEM" });
-    }
-  }
-
-  function connect() {
-    if (!currentUser || connecting || connected) return;
-    connecting = true;
-    setStatus("Connecting...", "warn");
-
-    try {
-      socket = new WebSocket(WS_URL);
-    } catch (error) {
-      connecting = false;
-      setStatus("Disconnected", "warn");
-      return;
-    }
-
-    socket.onopen = () => {
-      sendFrame("CONNECT", { "accept-version": "1.2", host: new URL(API_BASE).host });
-    };
-    socket.onmessage = (event) => parseFrames(event.data).forEach(handleFrame);
-    socket.onerror = () => disconnect(false, "Connection failed.");
-    socket.onclose = () => disconnect(false, "Connection lost.");
-  }
-
-  function handleFrame(rawFrame) {
-    const lines = rawFrame.split("\n");
-    const command = lines[0];
-    const blankIndex = lines.indexOf("");
-    const headers = {};
-    const headerLines = blankIndex === -1 ? lines.slice(1) : lines.slice(1, blankIndex);
-    headerLines.forEach((line) => {
-      const separator = line.indexOf(":");
-      if (separator > -1) headers[line.slice(0, separator)] = line.slice(separator + 1);
-    });
-    const body = blankIndex === -1 ? "" : lines.slice(blankIndex + 1).join("\n");
-
-    if (command === "CONNECTED") {
-      connecting = false;
-      setConnected(true);
-      setStatus(`Connected as ${currentUser}`, "ok");
-      startHeartbeat();
-      sendFrame("SEND", {
-        destination: "/app/chat.addUser",
-        "content-type": "application/json"
-      }, JSON.stringify({ sender: currentUser, type: "JOIN" }));
-      subscribeToUserConversationUpdates();
-      subscribeToActiveConversation();
-      return;
-    }
-
-    if (command === "MESSAGE" && headers.destination === `/topic/users/${currentUserPublicId}/conversations`) {
-      try {
-        handleConversationNotification(JSON.parse(body));
-      } catch (error) {
-        console.error("Invalid conversation notification:", error);
-      }
-      return;
-    }
-
-    if (command === "MESSAGE" && activeConversation && headers.destination === `/topic/chat/${activeConversation.id}`) {
-      try {
-        const message = JSON.parse(body);
-        appendMessage(message, message.senderPublicId === currentUserPublicId || getSenderName(message.sender) === currentUser);
-      } catch (error) {
-        appendMessage({ sender: "System", content: body, type: "SYSTEM" });
-      }
-      return;
-    }
-
-    if (command === "ERROR") disconnect(false, "Internet disconnected.");
-  }
-
-  function subscribeToActiveConversation() {
-    if (!connected || !activeConversation || activeSubscriptionId) return;
-    activeSubscriptionId = `chat-${activeConversation.id}`;
-    sendFrame("SUBSCRIBE", {
-      id: activeSubscriptionId,
-      destination: `/topic/chat/${activeConversation.id}`
-    });
-  }
-
-  function subscribeToUserConversationUpdates() {
-    if (!connected || !currentUserPublicId || userConversationSubscriptionId) return;
-    userConversationSubscriptionId = `user-conversations-${currentUserPublicId}`;
-    sendFrame("SUBSCRIBE", {
-      id: userConversationSubscriptionId,
-      destination: `/topic/users/${currentUserPublicId}/conversations`
-    });
-  }
-
-  function unsubscribeFromUserConversationUpdates() {
-    if (!connected || !userConversationSubscriptionId) {
-      userConversationSubscriptionId = null;
-      return;
-    }
-    sendFrame("UNSUBSCRIBE", { id: userConversationSubscriptionId });
-    userConversationSubscriptionId = null;
-  }
-
-  async function handleConversationNotification(conversation) {
-    const isNewConversation = upsertConversation(conversation);
-    renderConversations();
-
-    if (activeConversation && activeConversation.id === conversation.id) {
-      return;
-    }
-
-    if (isNewConversation || !activeConversation) {
-      await selectConversation(conversation);
-    }
-  }
-
-  function unsubscribeFromActiveConversation() {
-    if (!connected || !activeSubscriptionId) {
-      activeSubscriptionId = null;
-      return;
-    }
-    sendFrame("UNSUBSCRIBE", { id: activeSubscriptionId });
-    activeSubscriptionId = null;
-  }
-
-  function setConnected(state) {
-    connected = state;
-    leaveBtn.disabled = !state;
-    setComposerEnabled(state && !!activeConversation);
-  }
-
-  function setComposerEnabled(state) {
-    sendBtn.disabled = !state;
-    messageInput.disabled = !state;
-  }
-
-  function sendMessage() {
-    const content = messageInput.value.trim();
-    if (!connected || !content || !activeConversation) return;
-
-    sendFrame("SEND", {
-      destination: "/app/chat.sendMessage",
-      "content-type": "application/json"
-    }, JSON.stringify({
-      sender: currentUser,
-      content,
-      type: "CHAT",
-      conversationId: activeConversation.id
-    }));
-
-    messageInput.value = "";
-    messageInput.focus();
-  }
-
-  function disconnect(sendFrameOnClose = true, statusMessage = "") {
-    if (disconnecting) return;
-    disconnecting = true;
-    stopHeartbeat();
-    connecting = false;
-    unsubscribeFromActiveConversation();
-    unsubscribeFromUserConversationUpdates();
-
-    if (socket) {
-      if (sendFrameOnClose) manualClose = true;
-      if (sendFrameOnClose && socket.readyState === WebSocket.OPEN) {
-        try {
-          sendFrame("DISCONNECT", { receipt: "disconnect" });
-        } catch (error) {
-          // ignore
-        }
-      }
-      try {
-        socket.close();
-      } catch (error) {
-        // ignore
-      }
-      socket = null;
-    }
-
-    if (!manualClose && statusMessage) {
-      appendMessage({ sender: "System", content: statusMessage, type: "SYSTEM" });
-    }
-
-    manualClose = false;
-    setConnected(false);
-    setStatus("Disconnected", "warn");
-    disconnecting = false;
-  }
-
-  authTabs.forEach((button) => button.addEventListener("click", () => setAuthMode(button.dataset.mode)));
-  authForm.addEventListener("submit", (event) => {
-    event.preventDefault();
-    if (connecting || connected) return;
-    authenticate(authMode);
+  function setProfileHint(m,t=''){profileSaveHint.textContent=m;profileSaveHint.className='auth-hint'+(t?' is-'+t:'');}
+  function updateSwatches(c){colorSwatches.querySelectorAll('.swatch').forEach(s=>s.classList.toggle('is-active',s.dataset.color===c));}
+  function openProfileModal(){profileUsernameInput.value=me.username;pendingColor=me.avatarColor;modalAvatarIni.textContent=initial(me.username);applyAvatarColor(modalAvatar,me.avatarColor);updateSwatches(me.avatarColor);setProfileHint('');profileModal.hidden=false;setTimeout(()=>profileUsernameInput.focus(),60);}
+  function closeProfileModal(){profileModal.hidden=true;}
+  colorSwatches.addEventListener('click',e=>{const sw=e.target.closest('.swatch');if(!sw)return;pendingColor=sw.dataset.color;applyAvatarColor(modalAvatar,pendingColor);modalAvatarIni.textContent=initial(profileUsernameInput.value)||initial(me.username);updateSwatches(pendingColor);});
+  profileUsernameInput.addEventListener('input',()=>{modalAvatarIni.textContent=initial(profileUsernameInput.value)||initial(me.username);});
+  openProfileBtn.addEventListener('click',openProfileModal);
+  closeProfileBtn.addEventListener('click',closeProfileModal);
+  cancelProfileBtn.addEventListener('click',closeProfileModal);
+  profileModal.addEventListener('click',e=>{if(e.target===profileModal)closeProfileModal();});
+  saveProfileBtn.addEventListener('click',async()=>{
+    const nu=profileUsernameInput.value.trim();
+    if(!nu){setProfileHint('Username cannot be empty.','error');return;}
+    saveProfileBtn.disabled=true;saveSpinner.hidden=false;saveBtnLabel.style.opacity='0.5';setProfileHint('Saving...');
+    try{
+      const res=await authFetch(`${API}/api/users/me`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:nu,avatarColor:pendingColor})});
+      const data=await res.json();
+      if(!res.ok)throw new Error(data.error||'Save failed.');
+      saveSession(getToken(),data.username,data.publicId,data.avatarColor);
+      applyMe(data.username,data.publicId,data.avatarColor);
+      closeProfileModal();toast('Profile updated','ok');renderConvList();
+    }catch(err){setProfileHint(err.message,'error');}
+    finally{saveProfileBtn.disabled=false;saveSpinner.hidden=true;saveBtnLabel.style.opacity='1';}
   });
-  userSearchForm.addEventListener("submit", (event) => {
-    event.preventDefault();
-    searchAndOpenConversation(publicIdSearchInput.value).catch((error) => {
-      console.error(error);
-      setSearchStatus("Could not open conversation.", "error");
-    });
-  });
-  composerForm.addEventListener("submit", (event) => {
-    event.preventDefault();
-    sendMessage();
-  });
-  leaveBtn.addEventListener("click", () => disconnect(true));
 
-  setAuthMode("login");
-  setStatus("Disconnected", "warn");
-  setComposerEnabled(false);
-  showAuthOverlay();
+  async function loadConversations(){
+    try{
+      const res=await authFetch(`${API}/api/conversations?currentUser=${encodeURIComponent(me.username)}`);
+      if(!res.ok)throw new Error();
+      conversations=await res.json();
+    }catch{toast('Could not load conversations.','err');conversations=[];}
+    renderConvList();
+  }
+  function renderConvList(){convList.innerHTML='';if(!conversations.length){convList.innerHTML='<div class="conv-empty">No conversations yet.<br>Search a public ID to start.</div>';return;}conversations.forEach((c,i)=>{const b=buildConvItem(c);b.style.animationDelay=`${i*20}ms`;convList.appendChild(b);});}
+  function buildConvItem(conv){
+    const o=otherParticipant(conv);
+    const btn=document.createElement('button');btn.type='button';
+    btn.className='conv-item'+(active?.id===conv.id?' is-active':'');
+    const av=document.createElement('div');av.className='avatar avatar--sm';
+    av.innerHTML=`<span>${initial(o.username)}</span>`;applyAvatarColor(av,o.avatarColor);
+    const body=document.createElement('div');body.className='conv-item-body';
+    const n=document.createElement('div');n.className='conv-item-name';n.textContent=o.username;
+    const id=document.createElement('div');id.className='conv-item-id';id.textContent=o.publicId;
+    body.appendChild(n);body.appendChild(id);btn.appendChild(av);btn.appendChild(body);
+    btn.addEventListener('click',()=>selectConversation(conv));return btn;
+  }
+  function upsertConversation(c){const i=conversations.findIndex(x=>x.id===c.id);if(i>=0){conversations[i]=c;return false;}conversations.unshift(c);return true;}
+  function otherParticipant(c){const m1=c.participant1PublicId===me.publicId||c.participant1Username===me.username;return{username:m1?c.participant2Username:c.participant1Username,publicId:m1?c.participant2PublicId:c.participant1PublicId,avatarColor:m1?c.participant2AvatarColor:c.participant1AvatarColor};}
+  async function selectConversation(conv){
+    active=conv;const o=otherParticipant(conv);
+    chatTitle.textContent=o.username;chatSubtitle.textContent=o.publicId;
+    chatAvatarIni.textContent=initial(o.username);applyAvatarColor(chatAvatar,o.avatarColor);
+    emptyState.hidden=true;renderConvList();unsubActive();clearMessages();setComposerEnabled(false);
+    try{await loadMessages(conv.id);subActive();setComposerEnabled(connected);}
+    catch{appendSystem('Could not load messages.');}
+  }
+
+  function setSearchHint(m,t=''){searchHint.textContent=m;searchHint.className='search-hint'+(t?' is-'+t:'');}
+  userSearchForm.addEventListener('submit',async e=>{
+    e.preventDefault();
+    const id=searchInput.value.trim().toUpperCase();
+    if(!id)return;
+    if(id===me.publicId){setSearchHint('That is your own ID.','error');return;}
+    setSearchHint('Searching...');
+    try{
+      const uRes=await authFetch(`${API}/api/users/public/${encodeURIComponent(id)}`);
+      if(!uRes.ok){setSearchHint('No user found.','error');return;}
+      const cRes=await authFetch(`${API}/api/conversations`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({currentUser:me.username,otherPublicId:id})});
+      if(!cRes.ok){setSearchHint('Could not open conversation.','error');return;}
+      const conv=await cRes.json();upsertConversation(conv);searchInput.value='';setSearchHint('');renderConvList();await selectConversation(conv);
+    }catch{setSearchHint('Network error.','error');}
+  });
+
+  async function loadMessages(id){
+    const res=await authFetch(`${API}/api/chat/conversations/${id}/messages`);
+    if(!res.ok)throw new Error('HTTP '+res.status);
+    const h=await res.json();clearMessages();
+    if(!Array.isArray(h)||!h.length){appendSystem('No messages yet. Say hello!');return;}
+    h.forEach(m=>appendMessage(m));scrollBottom(false);
+  }
+  function isMine(m){if(m.senderPublicId&&me.publicId)return m.senderPublicId===me.publicId;return senderName(m)===me.username;}
+  function senderName(m){if(!m.sender)return'';return typeof m.sender==='string'?m.sender:(m.sender.username||'');}
+  function appendMessage(msg){
+    const type=(msg.type||'CHAT').toUpperCase();
+    if(type!=='CHAT'){appendSystem(msg.content||'');return;}
+    const mine=isMine(msg),ts=msg.timestamp?new Date(msg.timestamp):new Date(),ds=ts.toDateString();
+    if(ds!==lastMsgDate){lastMsgDate=ds;lastSenderId=null;const sep=document.createElement('div');sep.className='date-sep';sep.textContent=formatDate(ts);messagesPane.appendChild(sep);}
+    const sid=mine?'__me__':(msg.senderPublicId||senderName(msg)),first=sid!==lastSenderId;lastSenderId=sid;
+    const row=document.createElement('div');row.className=`msg-row ${mine?'is-mine':'is-theirs'}${first?' gap-top':''}`;
+    const bub=document.createElement('div');bub.className='bubble';
+    if(first&&!mine){const s=document.createElement('div');s.className='bubble-sender';s.textContent=senderName(msg)||'Unknown';bub.appendChild(s);}
+    const t=document.createElement('div');t.className='bubble-text';t.textContent=msg.content||'';bub.appendChild(t);
+    const f=document.createElement('div');f.className='bubble-footer';
+    const tm=document.createElement('span');tm.className='bubble-time';tm.textContent=formatTime(ts);
+    f.appendChild(tm);bub.appendChild(f);row.appendChild(bub);messagesPane.appendChild(row);
+  }
+  function appendSystem(txt){const el=document.createElement('div');el.className='msg-system';const i=document.createElement('div');i.className='msg-system-inner';i.textContent=txt;el.appendChild(i);messagesPane.appendChild(el);lastSenderId=null;}
+  function clearMessages(){Array.from(messagesPane.children).forEach(c=>{if(c!==emptyState)c.remove();});lastMsgDate=null;lastSenderId=null;}
+  function scrollBottom(s=true){messagesPane.scrollTo({top:messagesPane.scrollHeight,behavior:s?'smooth':'instant'});}
+  function formatTime(d){return d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});}
+  function formatDate(d){const diff=Math.floor((new Date()-d)/86400000);if(diff===0)return'Today';if(diff===1)return'Yesterday';return d.toLocaleDateString([],{month:'short',day:'numeric'});}
+
+  function setComposerEnabled(on){sendBtn.disabled=!on;textarea.disabled=!on;if(on)textarea.focus();}
+  textarea.addEventListener('input',()=>{textarea.style.height='auto';textarea.style.height=Math.min(textarea.scrollHeight,130)+'px';});
+  textarea.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();doSend();}});
+  composerForm.addEventListener('submit',e=>{e.preventDefault();doSend();});
+  function doSend(){const c=textarea.value.trim();if(!c||!connected||!active)return;stompSend('/app/chat.sendMessage',JSON.stringify({sender:me.username,content:c,type:'CHAT',conversationId:active.id}));textarea.value='';textarea.style.height='auto';textarea.focus();scrollBottom();}
+
+  function connect(){if(!me.username||connecting||connected)return;connecting=true;setStatus('Connecting...','');try{socket=new WebSocket(WS);}catch{connecting=false;setStatus('Disconnected','err');return;}socket.onopen=()=>stompFrame('CONNECT',{'accept-version':'1.2',host:new URL(API).host});socket.onmessage=e=>parseFrames(e.data).forEach(handleFrame);socket.onerror=()=>onDisconnect(false,'Connection error.');socket.onclose=()=>{if(!manualClose)onDisconnect(false,'Connection lost.');};}
+  function handleFrame(raw){
+    const nl=raw.indexOf('\n'),cmd=nl===-1?raw:raw.slice(0,nl),rest=raw.slice(nl+1),si=rest.indexOf('\n\n'),hdrsRaw=si===-1?rest:rest.slice(0,si),body=si===-1?'':rest.slice(si+2).replace(/\u0000$/,'');
+    const hdrs={};hdrsRaw.split('\n').forEach(l=>{const i=l.indexOf(':');if(i>-1)hdrs[l.slice(0,i).trim()]=l.slice(i+1).trim();});
+    if(cmd==='CONNECTED'){connecting=false;connected=true;leaveBtn.disabled=false;setStatus('Connected','ok');startHB();stompSend('/app/chat.addUser',JSON.stringify({sender:me.username,type:'JOIN'}));subConvUpdates();if(active)subActive();setComposerEnabled(!!active);toast('Connected','ok',2000);return;}
+    if(cmd==='MESSAGE'){const dest=hdrs.destination||'';if(dest===`/topic/users/${me.publicId}/conversations`){try{handleConvUpdate(JSON.parse(body));}catch{}return;}if(active&&dest===`/topic/chat/${active.id}`){try{const msg=JSON.parse(body);appendMessage(msg);scrollBottom();}catch{appendSystem(body);}return;}}
+    if(cmd==='ERROR'){toast(hdrs.message||'Server error','err');onDisconnect(false,'Server error.');}
+  }
+  async function handleConvUpdate(conv){const isNew=upsertConversation(conv);renderConvList();if(isNew&&(!active||active.id!==conv.id))toast(`New message from ${otherParticipant(conv).username}`,'ok');}
+  function subActive(){if(!connected||!active||activeSub)return;activeSub=`sub-chat-${active.id}`;stompFrame('SUBSCRIBE',{id:activeSub,destination:`/topic/chat/${active.id}`});}
+  function unsubActive(){if(activeSub){if(connected)stompFrame('UNSUBSCRIBE',{id:activeSub});activeSub=null;}}
+  function subConvUpdates(){if(!connected||!me.publicId||convSub)return;convSub=`sub-convs-${me.publicId}`;stompFrame('SUBSCRIBE',{id:convSub,destination:`/topic/users/${me.publicId}/conversations`});}
+  function unsubConvUpdates(){if(convSub){if(connected)stompFrame('UNSUBSCRIBE',{id:convSub});convSub=null;}}
+  function onDisconnect(manual,msg){
+    if(disconnecting)return;disconnecting=true;stopHB();connecting=false;unsubActive();unsubConvUpdates();
+    if(socket){if(manual){manualClose=true;if(socket.readyState===WebSocket.OPEN)try{stompFrame('DISCONNECT',{receipt:'bye'});}catch{};}try{socket.close();}catch{}socket=null;}
+    connected=false;leaveBtn.disabled=true;setComposerEnabled(false);setStatus('Disconnected','');
+    if(manual){clearSession();me={username:'',publicId:'',avatarColor:null};conversations=[];active=activeSub=convSub=null;clearMessages();emptyState.hidden=false;chatTitle.textContent='Select a conversation';chatSubtitle.textContent='Search a public ID or choose from the sidebar';chatAvatarIni.textContent='?';chatAvatar.style.background='';showAuth();}
+    else{if(msg){appendSystem(msg);toast(msg,'warn');}}
+    manualClose=false;disconnecting=false;
+  }
+  leaveBtn.addEventListener('click',()=>onDisconnect(true,''));
+  function stompFrame(cmd,hdrs={}){if(!socket||socket.readyState!==WebSocket.OPEN)return;const lines=[cmd];Object.entries(hdrs).forEach(([k,v])=>lines.push(`${k}:${String(v)}`));socket.send(lines.join('\n')+'\n\n\u0000');}
+  function stompSend(dest,body){if(!socket||socket.readyState!==WebSocket.OPEN)return;socket.send(`SEND\ndestination:${dest}\ncontent-type:application/json\ncontent-length:${new TextEncoder().encode(body).length}\n\n${body}\u0000`);}
+  function parseFrames(chunk){stompBuffer+=chunk;const out=[];let i;while((i=stompBuffer.indexOf('\u0000'))!==-1){out.push(stompBuffer.slice(0,i));stompBuffer=stompBuffer.slice(i+1);}return out;}
+  function startHB(){stopHB();heartbeat=setInterval(()=>{if(socket?.readyState===WebSocket.OPEN)socket.send('\n');},10000);}
+  function stopHB(){clearInterval(heartbeat);heartbeat=null;}
+
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!profileModal.hidden){closeProfileModal();return;}if(document.activeElement===searchInput)searchInput.blur();}if(e.key==='/'&&!appShell.hidden&&document.activeElement!==textarea&&document.activeElement!==searchInput){e.preventDefault();searchInput.focus();}});
+
+  (function init(){
+    const token=localStorage.getItem('aura.token'),username=localStorage.getItem('aura.username'),publicId=localStorage.getItem('aura.publicId'),avatarColor=localStorage.getItem('aura.avatarColor')||null;
+    if(token&&username){applyMe(username,publicId,avatarColor);showApp();loadConversations().then(connect);}
+    else{showAuth();}
+  })();
+
 })();

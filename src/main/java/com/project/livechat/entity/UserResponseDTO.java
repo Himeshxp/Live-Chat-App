@@ -1,15 +1,12 @@
 package com.project.livechat.entity;
 
-import jakarta.validation.constraints.Email;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
-
+/**
+ * Read-only projection of a User sent to the client.
+ * No validation annotations here — this is a response, not a request.
+ */
 public record UserResponseDTO(
-        @NotBlank
-        @Size(min = 3, max = 20)
         String username,
         String publicId,
-        @Email
-        String email
-) {
-}
+        String email,
+        String avatarColor   // hex string or null; frontend uses it for the avatar bubble
+) {}

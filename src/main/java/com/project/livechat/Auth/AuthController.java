@@ -1,64 +1,67 @@
 package com.project.livechat.Auth;
 
-
-import com.project.livechat.entity.User;
-import com.project.livechat.entity.UserRepository;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+import com.project.livechat.Auth.RateLimiterService;
 
 import java.util.Map;
-import java.util.UUID;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("api/auth")
-@CrossOrigin(origins = "*")
+@RequestMapping("/api/auth")
 public class AuthController {
-    private final UserRepository userRepository;
+
+    private final AuthService authService;
+    private final RateLimiterService rateLimiterService;
 
     @PostMapping("/register")
-    public User registerUser(@RequestBody User user){
-        if (user.getPublicId() == null || user.getPublicId().isBlank()) {
-            user.setPublicId(generatePublicId());
+    public ResponseEntity<?> register(
+            @RequestBody @Valid RegisterRequest request,
+            HttpServletRequest httpRequest
+    ) {
+        String ip = resolveClientIp(httpRequest);
+        if (!rateLimiterService.tryConsumeRegister(ip)) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                    .body(Map.of("error", "Too many registration attempts. Please wait 15 minutes."));
         }
-        return userRepository.save(user);
-
+        AuthResponse response = authService.register(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     @PostMapping("/login")
-    public ResponseEntity<Map<String, String>> login(
-            @RequestParam String email,
-            @RequestParam String password
+    public ResponseEntity<?> login(
+            @RequestBody @Valid AuthRequest request,
+            HttpServletRequest httpRequest
     ) {
-        User user = userRepository.findByEmail(email).orElse(null);
-        if (user == null) {
-            return ResponseEntity.badRequest().body(Map.of("message", "User not found"));
+        String ip = resolveClientIp(httpRequest);
+        if (!rateLimiterService.tryConsumeLogin(ip)) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                    .body(Map.of("error", "Too many login attempts. Please wait 10 minutes."));
         }
-        if (!user.getPassword().equals(password)) {
-            return ResponseEntity.status(401).body(Map.of("message", "Invalid Password"));
-        }
-        if (user.getPublicId() == null || user.getPublicId().isBlank()) {
-            user.setPublicId(generatePublicId());
-            userRepository.save(user);
-        }
-        return ResponseEntity.ok(Map.of(
-                "message", "Login Successful",
-                "username", user.getUsername(),
-                "publicId", user.getPublicId()
-        ));
+        return ResponseEntity.ok(authService.login(request));
     }
 
-    private String generatePublicId() {
-        String publicId;
-        do {
-            publicId = UUID.randomUUID()
-                    .toString()
-                    .replace("-", "")
-                    .substring(0, 8)
-                    .toUpperCase();
-        } while (userRepository.existsByPublicId(publicId));
-        return publicId;
+    /**
+     * Resolves the real client IP, respecting common reverse-proxy headers.
+     * Falls back to the direct remote address if no proxy headers are present.
+     */
+    private String resolveClientIp(HttpServletRequest request) {
+        String forwarded = request.getHeader("X-Forwarded-For");
+        if (forwarded != null && !forwarded.isBlank()) {
+            // X-Forwarded-For may contain a comma-separated chain; the first entry is the original client
+            return forwarded.split(",")[0].trim();
+        }
+        String realIp = request.getHeader("X-Real-IP");
+        if (realIp != null && !realIp.isBlank()) {
+            return realIp.trim();
+        }
+        return request.getRemoteAddr();
     }
-
 }

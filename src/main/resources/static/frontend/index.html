@@ -3,75 +3,268 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Live Chat Frontend</title>
+  <title>Aura — Messaging</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
-  <div class="auth-overlay" id="authOverlay" aria-modal="true" role="dialog">
-    <form class="auth-card" id="authForm">
-      <h2>Live Chat</h2>
-      <p>Log in or create an account to message people directly.</p>
 
-      <div class="auth-tabs" role="tablist" aria-label="Authentication mode">
-        <button type="button" class="auth-tab is-active" data-mode="login">Login</button>
-        <button type="button" class="auth-tab" data-mode="register">Register</button>
+  <!-- Toast notifications -->
+  <div id="toastContainer" class="toast-container" aria-live="assertive" aria-atomic="true"></div>
+
+  <!-- ── Profile modal ─────────────────────────────────────────────────── -->
+  <div class="modal-backdrop" id="profileModal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="profileModalTitle">
+      <div class="modal-header">
+        <h2 class="modal-title" id="profileModalTitle">Edit Profile</h2>
+        <button class="icon-btn" id="closeProfileModal" title="Close">
+          <svg viewBox="0 0 20 20" fill="none"><path d="M5 5l10 10M15 5L5 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        </button>
       </div>
 
-      <input id="usernameInput" class="auth-field auth-register-only" placeholder="Username" autocomplete="username" maxlength="32" />
-      <input id="emailInput" class="auth-field" placeholder="Email" autocomplete="email" />
-      <input id="passwordInput" class="auth-field" type="password" placeholder="Password" autocomplete="current-password" />
+      <div class="modal-body">
+        <!-- Avatar preview + color picker -->
+        <div class="profile-edit-avatar-wrap">
+          <div class="avatar avatar--xl profile-edit-avatar" id="modalAvatar">
+            <span id="modalAvatarInitial">?</span>
+          </div>
+          <div class="color-picker-row">
+            <span class="field-label">Avatar colour</span>
+            <div class="color-swatches" id="colorSwatches">
+              <button class="swatch" data-color="#7C5CFF" style="background:#7C5CFF" title="Violet"></button>
+              <button class="swatch" data-color="#20D6C7" style="background:#20D6C7" title="Teal"></button>
+              <button class="swatch" data-color="#E85D75" style="background:#E85D75" title="Rose"></button>
+              <button class="swatch" data-color="#F59E0B" style="background:#F59E0B" title="Amber"></button>
+              <button class="swatch" data-color="#3B82F6" style="background:#3B82F6" title="Blue"></button>
+              <button class="swatch" data-color="#10B981" style="background:#10B981" title="Emerald"></button>
+              <button class="swatch" data-color="#F97316" style="background:#F97316" title="Orange"></button>
+              <button class="swatch" data-color="#8B5CF6" style="background:#8B5CF6" title="Purple"></button>
+            </div>
+          </div>
+        </div>
 
-      <p class="auth-status" id="authStatus" aria-live="polite"></p>
+        <!-- Username field -->
+        <div class="field-group" style="margin-top:20px">
+          <label class="field-label" for="profileUsernameInput">Username</label>
+          <div class="field-wrap">
+            <svg class="field-icon" viewBox="0 0 20 20" fill="none">
+              <circle cx="10" cy="7" r="3" stroke="currentColor" stroke-width="1.5"/>
+              <path d="M3 17c0-3.314 3.134-6 7-6s7 2.686 7 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            <input id="profileUsernameInput" class="field-input" type="text" placeholder="your_username" maxlength="30" autocomplete="off" />
+          </div>
+        </div>
 
-      <button type="submit" id="authSubmitBtn">Login</button>
-    </form>
+        <p class="auth-hint" id="profileSaveHint" aria-live="polite"></p>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn-secondary" id="cancelProfileBtn">Cancel</button>
+        <button class="btn-primary" id="saveProfileBtn">
+          <span id="saveBtnLabel">Save changes</span>
+          <div class="btn-spinner" id="saveSpinner" hidden></div>
+        </button>
+      </div>
+    </div>
   </div>
 
-  <main class="shell">
-    <section class="panel">
-      <aside class="sidebar">
-        <div class="profile-strip">
-          <div>
-            <span class="eyebrow">Signed in</span>
-            <strong id="profileName">Not connected</strong>
+  <!-- ── Auth Screen ────────────────────────────────────────────────────── -->
+  <div class="auth-screen" id="authScreen">
+    <div class="auth-bg">
+      <div class="auth-orb auth-orb--1"></div>
+      <div class="auth-orb auth-orb--2"></div>
+    </div>
+    <div class="auth-panel">
+      <div class="auth-logo">
+        <div class="auth-logo-mark">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2z" fill="url(#lg1)"/>
+            <path d="M8 12h8M12 8v8" stroke="white" stroke-width="2" stroke-linecap="round"/>
+            <defs>
+              <linearGradient id="lg1" x1="2" y1="2" x2="22" y2="22" gradientUnits="userSpaceOnUse">
+                <stop stop-color="#818CF8"/><stop offset="1" stop-color="#38BDF8"/>
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+        <span class="auth-logo-text">Aura</span>
+      </div>
+
+      <div class="auth-tabs" role="tablist">
+        <button class="auth-tab is-active" data-mode="login" role="tab" aria-selected="true">Sign in</button>
+        <button class="auth-tab" data-mode="register" role="tab" aria-selected="false">Create account</button>
+      </div>
+
+      <form class="auth-form" id="authForm" novalidate>
+        <div class="field-group" id="usernameGroup" hidden>
+          <label class="field-label" for="usernameInput">Username</label>
+          <div class="field-wrap">
+            <svg class="field-icon" viewBox="0 0 20 20" fill="none">
+              <circle cx="10" cy="7" r="3" stroke="currentColor" stroke-width="1.5"/>
+              <path d="M3 17c0-3.314 3.134-6 7-6s7 2.686 7 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            <input id="usernameInput" class="field-input" type="text" placeholder="your_username" autocomplete="username" maxlength="30" />
           </div>
-          <code id="profilePublicId">--------</code>
         </div>
 
-        <form class="search-box" id="userSearchForm">
-          <input id="publicIdSearchInput" placeholder="Search public ID" autocomplete="off" maxlength="10" />
-          <button id="userSearchBtn" type="submit">Find</button>
+        <div class="field-group">
+          <label class="field-label" for="emailInput">Email address</label>
+          <div class="field-wrap">
+            <svg class="field-icon" viewBox="0 0 20 20" fill="none">
+              <rect x="2" y="4" width="16" height="13" rx="2" stroke="currentColor" stroke-width="1.5"/>
+              <path d="M2 7l8 5 8-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            <input id="emailInput" class="field-input" type="email" placeholder="you@example.com" autocomplete="email" />
+          </div>
+        </div>
+
+        <div class="field-group">
+          <label class="field-label" for="passwordInput">Password</label>
+          <div class="field-wrap">
+            <svg class="field-icon" viewBox="0 0 20 20" fill="none">
+              <rect x="4" y="9" width="12" height="9" rx="2" stroke="currentColor" stroke-width="1.5"/>
+              <path d="M7 9V6a3 3 0 016 0v3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            <input id="passwordInput" class="field-input" type="password" placeholder="••••••••" autocomplete="current-password" />
+          </div>
+        </div>
+
+        <p class="auth-hint" id="authStatus" aria-live="polite"></p>
+
+        <button type="submit" class="auth-submit" id="authSubmitBtn">
+          <span id="authBtnLabel">Sign in</span>
+          <div class="btn-spinner" id="authSpinner" hidden></div>
+        </button>
+      </form>
+
+      <p class="auth-footer">Aura&nbsp;&nbsp;·&nbsp;&nbsp;Private by default</p>
+    </div>
+  </div>
+
+  <!-- ── Main App ───────────────────────────────────────────────────────── -->
+  <div class="app" id="appShell" hidden>
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-top">
+        <div class="sidebar-logo">
+          <div class="sidebar-logo-mark">
+            <img src="./assests/Aura-logo1.png" width="100%" height="100%" class="logo-img">
+          </div>
+          <span class="sidebar-logo-text">Aura</span>
+        </div>
+        <button class="icon-btn" id="leaveBtn" title="Sign out" disabled>
+          <svg viewBox="0 0 20 20" fill="none">
+            <path d="M13 3h2a2 2 0 012 2v10a2 2 0 01-2 2h-2M8 14l4-4-4-4M12 10H3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Profile card — click to edit -->
+      <button class="profile-card" id="openProfileModal" title="Edit profile" type="button">
+        <div class="avatar avatar--lg" id="profileAvatar">
+          <span id="profileAvatarInitial">?</span>
+        </div>
+        <div class="profile-info">
+          <div class="profile-name" id="profileName">Loading…</div>
+          <div class="profile-id-row">
+            <div class="profile-id" id="profilePublicId">--------</div>
+            <div class="status-dot" id="connectionDot"></div>
+          </div>
+        </div>
+        <svg class="profile-edit-icon" viewBox="0 0 16 16" fill="none">
+          <path d="M11 2l3 3-8 8H3v-3l8-8z" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+
+      <!-- Search -->
+      <div class="sidebar-section">
+        <form class="search-form" id="userSearchForm">
+          <div class="search-wrap">
+            <svg class="search-icon" viewBox="0 0 20 20" fill="none">
+              <circle cx="9" cy="9" r="5.5" stroke="currentColor" stroke-width="1.5"/>
+              <path d="M13 13l3.5 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            <input id="publicIdSearchInput" class="search-input" placeholder="Search by public ID…" autocomplete="off" maxlength="10" />
+            <button type="submit" class="search-submit-btn" title="Find user">
+              <svg viewBox="0 0 16 16" fill="none">
+                <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+          </div>
         </form>
-        <p class="search-status" id="userSearchStatus" aria-live="polite"></p>
+        <p class="search-hint" id="userSearchStatus" aria-live="polite"></p>
+      </div>
 
-        <div class="conversation-header">
-          <h2>Chats</h2>
+      <!-- Conversations -->
+      <div class="sidebar-section sidebar-section--flex">
+        <div class="section-label">Messages</div>
+        <div class="conv-list" id="conversationList">
+          <div class="skeleton-item"></div>
+          <div class="skeleton-item"></div>
+          <div class="skeleton-item"></div>
         </div>
-        <div class="conversation-list" id="conversationList"></div>
-      </aside>
+      </div>
+    </aside>
 
-      <div class="chat-column">
-      <header class="topbar">
-        <div>
-          <h1 id="chatTitle">Select a chat</h1>
-          <p id="chatSubtitle">Search a public ID or choose a conversation.</p>
+    <!-- Chat pane -->
+    <div class="chat-pane">
+      <header class="chat-header">
+        <div class="chat-header-left">
+          <div class="avatar avatar--md" id="chatAvatar">
+            <span id="chatAvatarInitial">?</span>
+          </div>
+          <div class="chat-header-info">
+            <div class="chat-name" id="chatTitle">Select a conversation</div>
+            <div class="chat-meta" id="chatSubtitle">Search a public ID or choose from the sidebar</div>
+          </div>
         </div>
-        <div class="topbar-actions">
-          <div class="badge" id="statusBadge">Disconnected</div>
-          <button id="leaveBtn" class="ghost-btn" disabled>Disconnect</button>
+        <div class="chat-header-right">
+          <div class="conn-badge" id="statusBadge">
+            <div class="conn-dot"></div>
+            <span id="statusText">Disconnected</span>
+          </div>
         </div>
       </header>
 
-      <section id="messages" class="messages" aria-live="polite"></section>
+      <section class="messages-pane" id="messages" aria-live="polite">
+        <div class="empty-state" id="emptyState">
+          <div class="empty-illustration">
+            <svg width="64" height="64" viewBox="0 0 64 64" fill="none">
+              <circle cx="32" cy="32" r="31" stroke="url(#eg)" stroke-width="1" stroke-dasharray="4 3"/>
+              <circle cx="32" cy="32" r="18" fill="url(#eg2)" opacity="0.1"/>
+              <path d="M20 32h24M32 20v24" stroke="url(#eg)" stroke-width="1.8" stroke-linecap="round" opacity="0.4"/>
+              <defs>
+                <linearGradient id="eg" x1="1" y1="1" x2="63" y2="63" gradientUnits="userSpaceOnUse">
+                  <stop stop-color="#818CF8"/><stop offset="1" stop-color="#38BDF8"/>
+                </linearGradient>
+                <linearGradient id="eg2" x1="14" y1="14" x2="50" y2="50" gradientUnits="userSpaceOnUse">
+                  <stop stop-color="#818CF8"/><stop offset="1" stop-color="#38BDF8"/>
+                </linearGradient>
+              </defs>
+            </svg>
+          </div>
+          <div class="empty-title">Start a conversation</div>
+          <div class="empty-desc">Search for someone's public ID in the sidebar, or pick an existing chat.</div>
+        </div>
+      </section>
 
       <form class="composer" id="composerForm">
-        <input id="messageInput" placeholder="Type a message..." autocomplete="off" disabled />
-        <button id="sendBtn" type="submit" disabled>Send</button>
+        <div class="composer-wrap">
+          <textarea id="messageInput" class="composer-textarea" placeholder="Write a message…" rows="1" autocomplete="off" disabled></textarea>
+          <button type="submit" class="composer-send-btn" id="sendBtn" disabled title="Send">
+            <svg viewBox="0 0 20 20" fill="none">
+              <path d="M3 10L17 3l-4 7 4 7L3 10z" fill="currentColor"/>
+            </svg>
+          </button>
+        </div>
       </form>
-      </div>
-    </section>
-  </main>
+    </div>
 
-  <script src="./app.js?v=history-fix-2"></script>
+  </div>
+
+  <script src="./app.js?v=4"></script>
 </body>
 </html>
