@@ -19,16 +19,20 @@ import java.time.Instant;
 @NoArgsConstructor
 @Builder
 public class ChatMessage {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
     @Enumerated(EnumType.STRING)
     private MessageType type;
+
     private String content;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "sender_id",nullable = false)
     private User sender;
+
     @CreatedDate
     private Instant timestamp;
 

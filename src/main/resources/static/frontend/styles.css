@@ -76,7 +76,7 @@ body {
 }
 
 body {
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-family: 'Poppins', system-ui, -apple-system, sans-serif;
   font-size: 14px;
   line-height: 1.5;
   color: var(--text);
@@ -163,6 +163,12 @@ textarea {
   color: #fde68a;
 }
 
+.toast--connection-lost {
+  border-color: #E56F7D45;
+  color: var(--accent);
+  font-weight: 600;
+}
+
 .toast-dot {
   width: 7px;
   height: 7px;
@@ -179,7 +185,7 @@ textarea {
 }
 
 .toast--warn .toast-dot {
-  background: #f59e0b;
+  background: var(--accent);
 }
 
 @keyframes toastIn {
@@ -378,10 +384,8 @@ textarea {
 }
 
 .auth-logo-text {
-  font-size: 20px;
   font-weight: 700;
-  letter-spacing: -0.5px;
-  color: var(--text);
+  /* Font & Color & Size is Applied Using Inline-CSS */
 }
 
 .auth-tabs {
@@ -506,8 +510,8 @@ textarea {
   width: 40px;
   height: 40px;
   overflow: hidden;
-  padding: 0.2em;
   border-radius: 8px;
+  border: 2px solid var(--border2);
   background: var(--grad-dim);
   display: grid;
   place-items: center;
@@ -515,10 +519,11 @@ textarea {
 
 .logo-img {
   margin: auto;
+  object-fit: cover;
 }
 
 .sidebar-logo-text {
-  font-size: 15px;
+  font-size: 1.5em;
   font-weight: 700;
   letter-spacing: -0.3px;
 }
@@ -1093,6 +1098,7 @@ textarea {
   line-height: 1.55;
   word-break: break-word;
   position: relative;
+  margin-bottom: 0.1em;
 }
 
 /* Their bubble — lighter surface so text pops */

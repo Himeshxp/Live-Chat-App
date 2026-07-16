@@ -10,7 +10,7 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * In-memory per-IP rate limiter.
  *
- * Register endpoint: 5 requests per IP per 15 minutes.
+ * Register endpoint: 5 requests per IP per 10 minutes.
  * Login endpoint:   10 requests per IP per 10 minutes.
  */
 @Service
@@ -40,12 +40,12 @@ public class RateLimiterService {
                 .tryConsume(1);
     }
 
-    // 5 tokens, refilled every 15 minutes
+    // 5 tokens, refilled every 10 minutes
     private Bucket buildRegisterBucket() {
         return Bucket.builder()
                 .addLimit(Bandwidth.builder()
                         .capacity(5)
-                        .refillIntervally(5, Duration.ofMinutes(15))
+                        .refillIntervally(5, Duration.ofMinutes(10))
                         .build())
                 .build();
     }

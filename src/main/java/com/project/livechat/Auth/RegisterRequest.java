@@ -10,8 +10,8 @@ public record RegisterRequest(
         @NotBlank(message = "Username is required")
         @Size(min = 3, max = 30, message = "Username must be between 3 and 30 characters")
         @Pattern(
-                regexp = "^[a-zA-Z0-9_]+$",
-                message = "Username can only contain letters, digits, and underscores"
+                regexp = "^[a-zA-Z]+$",
+                message = "Username can only contain Alphabets"
         )
         String username,
 
