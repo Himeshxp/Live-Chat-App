@@ -5,7 +5,6 @@ import com.project.livechat.entity.UserRepository;
 import com.project.livechat.security.JwtService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.BadCredentialsException;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -51,11 +50,14 @@ public class AuthService {
     }
 
     public AuthResponse login(AuthRequest request) {
+        // Fix 8: both "email not found" and "wrong password" throw the same exception
+        // with the same message. This prevents an attacker from probing which emails
+        // are registered by comparing the error response.
         User user = userRepository.findByEmail(request.email())
-                .orElseThrow(() -> new UsernameNotFoundException("No account found with email: " + request.email()));
+                .orElseThrow(() -> new BadCredentialsException("Invalid email or password"));
 
         if (!passwordEncoder.matches(request.password(), user.getPassword())) {
-            throw new BadCredentialsException("Invalid password");
+            throw new BadCredentialsException("Invalid email or password");
         }
 
         String token = jwtService.generateToken(user.getEmail());

@@ -7,6 +7,5 @@ package com.project.livechat.entity;
 public record UserResponseDTO(
         String username,
         String publicId,
-        String email,
         String avatarColor   // hex string or null; frontend uses it for the avatar bubble
 ) {}

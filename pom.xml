@@ -87,6 +87,13 @@
             <version>8.14.0</version>
         </dependency>
 
+        <!-- Caffeine cache — used by RateLimiterService for TTL-based bucket eviction -->
+        <dependency>
+            <groupId>com.github.ben-manes.caffeine</groupId>
+            <artifactId>caffeine</artifactId>
+            <version>3.1.8</version>
+        </dependency>
+
         <!-- JJWT 0.12.x -->
         <dependency>
             <groupId>io.jsonwebtoken</groupId>

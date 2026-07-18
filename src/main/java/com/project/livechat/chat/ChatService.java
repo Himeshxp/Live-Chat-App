@@ -1,7 +1,6 @@
 package com.project.livechat.chat;
 
 import lombok.RequiredArgsConstructor;
-
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -13,6 +12,7 @@ import java.util.List;
 public class ChatService {
 
     private final ChatRepo repo;
+    private final com.project.livechat.entity.conversation.ConversationService conversationService;
 
     public ChatMessage saveChatMessage(ChatMessage message) {
         if (message.getTimestamp() == null) {
@@ -20,30 +20,11 @@ public class ChatService {
         }
         return repo.save(message);
     }
-    public void deleteById(Integer id) {
-        repo.deleteById(id);
-    }
-
-    public ChatMessage save(ChatMessage message) {
-        message.setTimestamp(Instant.now());
-        return repo.save(message);
-    }
-
-    public List<ChatMessage> findAll() {
-        return repo.findTop100ByOrderByTimestampAsc();
-    }
 
     @Transactional(readOnly = true)
-    public List<ChatMessageResponseDTO> getMessagesForConversation(Integer conversationId) {
+    public List<ChatMessageResponseDTO> getMessagesForConversation(Integer conversationId, String currentUser) {
+        conversationService.getConversationForMessage(conversationId, currentUser);
         return repo.findByConversationIdOrderByTimestampAsc(conversationId)
-                .stream()
-                .map(this::toResponse)
-                .toList();
-    }
-
-    @Transactional(readOnly = true)
-    public List<ChatMessageResponseDTO> getMessageHistory() {
-        return repo.findTop100ByOrderByTimestampAsc()
                 .stream()
                 .map(this::toResponse)
                 .toList();
@@ -52,12 +33,11 @@ public class ChatService {
     public ChatMessageResponseDTO toResponse(ChatMessage message) {
         return new ChatMessageResponseDTO(
                 message.getSender() == null ? "Unknown" : message.getSender().getUsername(),
-                message.getSender() == null ? null : message.getSender().getPublicId(),
+                message.getSender() == null ? null    : message.getSender().getPublicId(),
                 message.getContent(),
                 message.getType() == null ? MessageType.CHAT : message.getType(),
                 message.getTimestamp(),
                 message.getConversation() == null ? null : message.getConversation().getId()
         );
     }
-
 }

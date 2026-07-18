@@ -63,8 +63,10 @@ public class ConversationService {
                 conversation.getId(),
                 conversation.getParticipant1().getUsername(),
                 conversation.getParticipant1().getPublicId(),
+                conversation.getParticipant1().getAvatarColor(),   // Fix 4
                 conversation.getParticipant2().getUsername(),
                 conversation.getParticipant2().getPublicId(),
+                conversation.getParticipant2().getAvatarColor(),   // Fix 4
                 conversation.getCreatedAt()
         );
     }

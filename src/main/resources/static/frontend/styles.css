@@ -302,7 +302,9 @@ textarea {
   inset: 0;
   display: grid;
   place-items: center;
-  background: var(--bg);
+  background:
+    linear-gradient(90deg, rgba(255, 247, 243, 0.66), rgba(255, 241, 248, 0.52)),
+    url("./assests/Aura-bg.png") center / cover no-repeat;
   z-index: 50;
   overflow: hidden;
 }
@@ -316,13 +318,13 @@ textarea {
   inset: 0;
   pointer-events: none;
   overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.1), transparent 44%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.58));
 }
 
 .auth-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(90px);
-  opacity: 0.22;
+  display: none;
 }
 
 .auth-orb--1 {
@@ -345,11 +347,11 @@ textarea {
   position: relative;
   z-index: 1;
   width: min(420px, calc(100vw - 32px));
-  background: var(--bg2);
+  background: rgba(255, 255, 255, 0.72);
   backdrop-filter: blur(24px);
-  border: 1px solid var(--border2);
+  border: 1px solid rgba(255, 255, 255, 0.64);
   border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-lg), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  box-shadow: 0 24px 70px rgba(83, 50, 71, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.72);
   padding: 36px 32px 28px;
   animation: panelIn 360ms cubic-bezier(0.34, 1.4, 0.64, 1) both;
 }

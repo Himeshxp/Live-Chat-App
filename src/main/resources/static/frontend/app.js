@@ -2,8 +2,19 @@
 'use strict';
 (function () {
 
-  const API = 'http://localhost:8080';
-  const WS = API.replace(/^http/, 'ws') + '/ws/websocket';
+  // Derive API base and WebSocket URL from the current page origin so the
+  // same build works on localhost, Render, or any other host without changes.
+  function defaultApiBase() {
+    if (window.AURA_API_BASE) return window.AURA_API_BASE;
+    const { protocol, hostname, port, origin } = window.location;
+    const localHost = hostname === 'localhost' || hostname === '127.0.0.1';
+    if (protocol === 'file:' || (localHost && port && port !== '8080')) {
+      return 'http://localhost:8080';
+    }
+    return origin;
+  }
+  const API = defaultApiBase().replace(/\/$/, '');
+  const WS  = API.replace(/^http/, 'ws') + '/ws/websocket';
 
   const $ = id => document.getElementById(id);
   const authScreen = $('authScreen'), appShell = $('appShell');
@@ -57,6 +68,14 @@
   function clearSession() { ['aura.token', 'aura.username', 'aura.publicId', 'aura.avatarColor'].forEach(k => localStorage.removeItem(k)); }
   function getToken() { return localStorage.getItem('aura.token') || ''; }
   function authFetch(url, opts = {}) { opts.headers = { 'Authorization': `Bearer ${getToken()}`, ...(opts.headers || {}) }; return fetch(url, opts); }
+  async function readJson(res) {
+    const text = await res.text();
+    const type = res.headers.get('content-type') || '';
+    if (!text) return {};
+    if (type.includes('application/json')) return JSON.parse(text);
+    if (text.trim().startsWith('{') || text.trim().startsWith('[')) return JSON.parse(text);
+    throw new Error(res.ok ? 'Unexpected server response.' : 'Server returned an HTML error page. Check the backend URL and server logs.');
+  }
 
   function applyMe(u, p, c) { me = { username: u, publicId: p || '', avatarColor: c || null }; profileName.textContent = u; profilePublicId.textContent = p || '--------'; profileAvatarIni.textContent = initial(u); applyAvatarColor(profileAvatar, c); }
 
@@ -88,7 +107,7 @@
       const ep = authMode === 'register' ? 'register' : 'login';
       const body = authMode === 'register' ? { username, email, password } : { email, password };
       const res = await fetch(`${API}/api/auth/${ep}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-      const data = await res.json();
+      const data = await readJson(res);
       if (!res.ok) {
         const m = data.fields ? Object.values(data.fields).join(' ') : (data.error || 'Something went wrong.');
         throw new Error(m);
@@ -122,7 +141,7 @@
     saveProfileBtn.disabled = true; saveSpinner.hidden = false; saveBtnLabel.style.opacity = '0.5'; setProfileHint('Saving...');
     try {
       const res = await authFetch(`${API}/api/users/me`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: nu, avatarColor: pendingColor }) });
-      const data = await res.json();
+      const data = await readJson(res);
       if (!res.ok) throw new Error(data.error || 'Save failed.');
       saveSession(getToken(), data.username, data.publicId, data.avatarColor);
       applyMe(data.username, data.publicId, data.avatarColor);
@@ -133,9 +152,10 @@
 
   async function loadConversations() {
     try {
-      const res = await authFetch(`${API}/api/conversations?currentUser=${encodeURIComponent(me.username)}`);
+      // currentUser is now derived server-side from the JWT — no need to send it
+      const res = await authFetch(`${API}/api/conversations`);
       if (!res.ok) throw new Error();
-      conversations = await res.json();
+      conversations = await readJson(res);
     } catch { toast('Could not load conversations.', 'err'); conversations = []; }
     renderConvList();
   }
@@ -173,16 +193,16 @@
     try {
       const uRes = await authFetch(`${API}/api/users/public/${encodeURIComponent(id)}`);
       if (!uRes.ok) { setSearchHint('No user found.', 'error'); return; }
-      const cRes = await authFetch(`${API}/api/conversations`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ currentUser: me.username, otherPublicId: id }) });
+      const cRes = await authFetch(`${API}/api/conversations`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ otherPublicId: id }) });
       if (!cRes.ok) { setSearchHint('Could not open conversation.', 'error'); return; }
-      const conv = await cRes.json(); upsertConversation(conv); searchInput.value = ''; setSearchHint(''); renderConvList(); await selectConversation(conv);
+      const conv = await readJson(cRes); upsertConversation(conv); searchInput.value = ''; setSearchHint(''); renderConvList(); await selectConversation(conv);
     } catch { setSearchHint('Network error.', 'error'); }
   });
 
   async function loadMessages(id) {
     const res = await authFetch(`${API}/api/chat/conversations/${id}/messages`);
     if (!res.ok) throw new Error('HTTP ' + res.status);
-    const h = await res.json(); clearMessages();
+    const h = await readJson(res); clearMessages();
     if (!Array.isArray(h) || !h.length) { appendSystem('No messages yet. Say hello!'); return; }
     h.forEach(m => appendMessage(m)); scrollBottom(false);
   }
@@ -214,7 +234,7 @@
   composerForm.addEventListener('submit', e => { e.preventDefault(); doSend(); });
   function doSend() { const c = textarea.value.trim(); if (!c || !connected || !active) return; stompSend('/app/chat.sendMessage', JSON.stringify({ sender: me.username, content: c, type: 'CHAT', conversationId: active.id })); textarea.value = ''; textarea.style.height = 'auto'; textarea.focus(); scrollBottom(); }
 
-  function connect() { if (!me.username || connecting || connected) return; connecting = true; setStatus('Connecting...', ''); try { socket = new WebSocket(WS); } catch { connecting = false; setStatus('Disconnected', 'err'); return; } socket.onopen = () => stompFrame('CONNECT', { 'accept-version': '1.2', host: new URL(API).host }); socket.onmessage = e => parseFrames(e.data).forEach(handleFrame); socket.onerror = () => onDisconnect(false, 'Connection error.'); socket.onclose = () => { if (!manualClose) onDisconnect(false, 'Connection lost.'); }; }
+  function connect() { if (!me.username || connecting || connected) return; connecting = true; setStatus('Connecting...', ''); try { socket = new WebSocket(WS); } catch { connecting = false; setStatus('Disconnected', 'err'); return; } socket.onopen = () => stompFrame('CONNECT', { 'accept-version': '1.2', host: new URL(API).host, 'Authorization': `Bearer ${getToken()}` }); socket.onmessage = e => parseFrames(e.data).forEach(handleFrame); socket.onerror = () => onDisconnect(false, 'Connection error.'); socket.onclose = () => { if (!manualClose) onDisconnect(false, 'Connection lost.'); }; }
   function handleFrame(raw) {
     const nl = raw.indexOf('\n'), cmd = nl === -1 ? raw : raw.slice(0, nl), rest = raw.slice(nl + 1), si = rest.indexOf('\n\n'), hdrsRaw = si === -1 ? rest : rest.slice(0, si), body = si === -1 ? '' : rest.slice(si + 2).replace(/\u0000$/, '');
     const hdrs = {}; hdrsRaw.split('\n').forEach(l => { const i = l.indexOf(':'); if (i > -1) hdrs[l.slice(0, i).trim()] = l.slice(i + 1).trim(); });
@@ -235,7 +255,12 @@
     else { if (msg) { appendSystem(msg); toast(msg, 'warn'); } }
     manualClose = false; disconnecting = false;
   }
-  leaveBtn.addEventListener('click', () => onDisconnect(true, ''));
+  leaveBtn.addEventListener('click', async () => {
+    // Revoke the token server-side before tearing down the local session.
+    // This prevents a stolen token from being reused after logout.
+    try { await authFetch(`${API}/api/auth/logout`, { method: 'POST' }); } catch { /* ignore */ }
+    onDisconnect(true, '');
+  });
   function stompFrame(cmd, hdrs = {}) { if (!socket || socket.readyState !== WebSocket.OPEN) return; const lines = [cmd]; Object.entries(hdrs).forEach(([k, v]) => lines.push(`${k}:${String(v)}`)); socket.send(lines.join('\n') + '\n\n\u0000'); }
   function stompSend(dest, body) { if (!socket || socket.readyState !== WebSocket.OPEN) return; socket.send(`SEND\ndestination:${dest}\ncontent-type:application/json\ncontent-length:${new TextEncoder().encode(body).length}\n\n${body}\u0000`); }
   function parseFrames(chunk) { stompBuffer += chunk; const out = []; let i; while ((i = stompBuffer.indexOf('\u0000')) !== -1) { out.push(stompBuffer.slice(0, i)); stompBuffer = stompBuffer.slice(i + 1); } return out; }

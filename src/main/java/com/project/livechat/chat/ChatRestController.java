@@ -3,6 +3,7 @@ package com.project.livechat.chat;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
+import java.security.Principal;
 import java.util.List;
 
 /**
@@ -16,15 +17,12 @@ public class ChatRestController {
 
     private final ChatService chatService;
 
-    /** Returns the 100 most recent messages across all conversations (legacy/debug). */
-    @GetMapping("/messages")
-    public List<ChatMessageResponseDTO> getMessages() {
-        return chatService.getMessageHistory();
-    }
-
     /** Returns all messages for a specific conversation, ordered oldest-first. */
     @GetMapping("/conversations/{conversationId}/messages")
-    public List<ChatMessageResponseDTO> getMessagesForConversation(@PathVariable Integer conversationId) {
-        return chatService.getMessagesForConversation(conversationId);
+    public List<ChatMessageResponseDTO> getMessagesForConversation(
+            @PathVariable Integer conversationId,
+            Principal principal
+    ) {
+        return chatService.getMessagesForConversation(conversationId, principal.getName());
     }
 }

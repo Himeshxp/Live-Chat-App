@@ -47,6 +47,6 @@ public class UserService {
     }
 
     private UserResponseDTO toResponse(User u) {
-        return new UserResponseDTO(u.getUsername(), u.getPublicId(), u.getEmail(), u.getAvatarColor());
+        return new UserResponseDTO(u.getUsername(), u.getPublicId(), u.getAvatarColor());
     }
 }

@@ -71,6 +71,26 @@ public class GlobalExceptionHandler {
     }
 
     // -----------------------------------------------------------------------
+    // 404 Not Found — entity lookups (conversations, users)
+    // -----------------------------------------------------------------------
+    @ExceptionHandler(jakarta.persistence.EntityNotFoundException.class)
+    public ResponseEntity<Map<String, String>> handleEntityNotFound(jakarta.persistence.EntityNotFoundException ex) {
+        log.debug("Entity not found: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(error(ex.getMessage()));
+    }
+
+    // -----------------------------------------------------------------------
+    // 400 Bad Request — business rule violations (e.g. messaging yourself)
+    // -----------------------------------------------------------------------
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<Map<String, String>> handleIllegalArgument(IllegalArgumentException ex) {
+        log.debug("Bad request: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(error(ex.getMessage()));
+    }
+
+    // -----------------------------------------------------------------------
     // 404 Not Found — no handler / no static resource
     // -----------------------------------------------------------------------
     @ExceptionHandler(NoResourceFoundException.class)

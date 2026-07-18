@@ -1,6 +1,7 @@
 package com.project.livechat.security;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -17,6 +18,7 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -25,9 +27,9 @@ import java.util.List;
  * Key decisions:
  *  - CSRF disabled because the API is stateless (JWT-based, no cookies).
  *  - Session management is STATELESS — no server-side HTTP session is created.
- *  - The JwtAuthFilter runs before Spring's own UsernamePasswordAuthenticationFilter.
- *  - Public routes: /api/auth/**, /ws/** (WebSocket handshake), and static frontend files.
- *  - Everything else requires a valid JWT in the Authorization header.
+ *  - JwtAuthFilter runs before UsernamePasswordAuthenticationFilter.
+ *  - CORS is locked to ALLOWED_ORIGINS env var — no wildcard in production.
+ *  - /api/auth/logout is authenticated (needs a valid token to revoke it).
  */
 @Configuration
 @EnableWebSecurity
@@ -35,6 +37,13 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtAuthFilter jwtAuthFilter;
+    private final JsonAuthEntryPoint jsonAuthEntryPoint;
+
+    // Fix 9: CORS origin(s) come from an env var, not hardcoded wildcard.
+    // Set ALLOWED_ORIGINS=https://yourdomain.com on the server.
+    // Multiple origins can be comma-separated: https://a.com,https://b.com
+    @Value("${allowed.origins:*}")
+    private String allowedOriginsRaw;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -43,14 +52,12 @@ public class SecurityConfig {
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .sessionManagement(session ->
                 session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .exceptionHandling(ex -> ex.authenticationEntryPoint(jsonAuthEntryPoint))
             .authorizeHttpRequests(auth -> auth
-                // Auth endpoints are public — no token needed to log in or register
                 .requestMatchers("/api/auth/register", "/api/auth/login").permitAll()
-                // WebSocket SockJS handshake must be open to all
                 .requestMatchers("/ws/**").permitAll()
-                // Static frontend files served from /frontend/**
                 .requestMatchers("/frontend/**", "/", "/index.html").permitAll()
-                // Everything else requires authentication
+                // logout requires a valid token (so we know what to revoke)
                 .anyRequest().authenticated()
             )
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
@@ -61,7 +68,23 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOriginPatterns(List.of("*"));
+
+        List<String> origins = Arrays.stream(allowedOriginsRaw.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .toList();
+
+        // "*" with allowCredentials=true is rejected by browsers.
+        // Use setAllowedOriginPatterns("*") for the wildcard case (local dev /
+        // single-JAR same-origin deployment where the exact URL isn't known yet).
+        // Once you know your Render URL, set ALLOWED_ORIGINS=https://your-app.onrender.com
+        // and this will switch to the strict setAllowedOrigins path automatically.
+        if (origins.size() == 1 && origins.get(0).equals("*")) {
+            config.setAllowedOriginPatterns(List.of("*"));
+        } else {
+            config.setAllowedOrigins(origins);
+        }
+
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("Authorization", "Content-Type"));
         config.setAllowCredentials(true);
