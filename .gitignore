@@ -27,6 +27,7 @@ target/
 /nbdist/
 /.nb-gradle/
 build/
+.kiro/
 !**/src/main/**/build/
 !**/src/test/**/build/
 

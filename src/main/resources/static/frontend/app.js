@@ -43,6 +43,7 @@
   const sendBtn = $('sendBtn'), toastContainer = $('toastContainer');
 
   let me = { username: '', publicId: '', avatarColor: null }, authMode = 'login';
+  let authToken = '';
   let conversations = [], active = null, activeSub = null, convSub = null;
   let socket = null, connected = false, connecting = false, disconnecting = false, manualClose = false;
   let heartbeat = null, stompBuffer = '', lastMsgDate = null, lastSenderId = null, pendingColor = null;
@@ -64,9 +65,20 @@
     el.addEventListener('click', d);
   }
 
-  function saveSession(t, u, p, c) { localStorage.setItem('aura.token', t || ''); localStorage.setItem('aura.username', u || ''); localStorage.setItem('aura.publicId', p || ''); localStorage.setItem('aura.avatarColor', c || ''); }
-  function clearSession() { ['aura.token', 'aura.username', 'aura.publicId', 'aura.avatarColor'].forEach(k => localStorage.removeItem(k)); }
-  function getToken() { return localStorage.getItem('aura.token') || ''; }
+  const sessionKeys = ['aura.token', 'aura.username', 'aura.publicId', 'aura.avatarColor'];
+  function saveSession(t, u, p, c) {
+    authToken = t || '';
+    sessionStorage.setItem('aura.token', authToken);
+    sessionStorage.setItem('aura.username', u || '');
+    sessionStorage.setItem('aura.publicId', p || '');
+    sessionStorage.setItem('aura.avatarColor', c || '');
+    sessionKeys.forEach(k => localStorage.removeItem(k));
+  }
+  function clearSession() {
+    authToken = '';
+    sessionKeys.forEach(k => { sessionStorage.removeItem(k); localStorage.removeItem(k); });
+  }
+  function getToken() { return authToken || sessionStorage.getItem('aura.token') || ''; }
   function authFetch(url, opts = {}) { opts.headers = { 'Authorization': `Bearer ${getToken()}`, ...(opts.headers || {}) }; return fetch(url, opts); }
   async function readJson(res) {
     const text = await res.text();
@@ -138,9 +150,13 @@
   saveProfileBtn.addEventListener('click', async () => {
     const nu = profileUsernameInput.value.trim();
     if (!nu) { setProfileHint('Username cannot be empty.', 'error'); return; }
+    const patch = {};
+    if (nu !== me.username) patch.username = nu;
+    if (pendingColor !== me.avatarColor) patch.avatarColor = pendingColor;
+    if (!Object.keys(patch).length) { closeProfileModal(); return; }
     saveProfileBtn.disabled = true; saveSpinner.hidden = false; saveBtnLabel.style.opacity = '0.5'; setProfileHint('Saving...');
     try {
-      const res = await authFetch(`${API}/api/users/me`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: nu, avatarColor: pendingColor }) });
+      const res = await authFetch(`${API}/api/users/me`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) });
       const data = await readJson(res);
       if (!res.ok) throw new Error(data.error || 'Save failed.');
       saveSession(getToken(), data.username, data.publicId, data.avatarColor);
@@ -270,7 +286,9 @@
   document.addEventListener('keydown', e => { if (e.key === 'Escape') { if (!profileModal.hidden) { closeProfileModal(); return; } if (document.activeElement === searchInput) searchInput.blur(); } if (e.key === '/' && !appShell.hidden && document.activeElement !== textarea && document.activeElement !== searchInput) { e.preventDefault(); searchInput.focus(); } });
 
   (function init() {
-    const token = localStorage.getItem('aura.token'), username = localStorage.getItem('aura.username'), publicId = localStorage.getItem('aura.publicId'), avatarColor = localStorage.getItem('aura.avatarColor') || null;
+    const source = sessionStorage.getItem('aura.token') ? sessionStorage : localStorage;
+    const token = source.getItem('aura.token'), username = source.getItem('aura.username'), publicId = source.getItem('aura.publicId'), avatarColor = source.getItem('aura.avatarColor') || null;
+    if (token) saveSession(token, username, publicId, avatarColor);
     if (token && username) { applyMe(username, publicId, avatarColor); showApp(); loadConversations().then(connect); }
     else { showAuth(); }
   })();
