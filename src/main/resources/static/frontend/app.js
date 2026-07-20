@@ -32,11 +32,15 @@
   const saveProfileBtn = $('saveProfileBtn'), saveBtnLabel = $('saveBtnLabel');
   const saveSpinner = $('saveSpinner'), profileSaveHint = $('profileSaveHint');
   const modalAvatar = $('modalAvatar'), modalAvatarIni = $('modalAvatarInitial');
-  const profileUsernameInput = $('profileUsernameInput'), colorSwatches = $('colorSwatches');
+  const profileUsernameInput = $('profileUsernameInput'), profilePreviewName = $('profilePreviewName');
+  const colorSwatches = $('colorSwatches');
+  const initialColorPicker = $('initialColorPicker'), themeSwatches = $('themeSwatches');
   const userSearchForm = $('userSearchForm'), searchInput = $('publicIdSearchInput');
   const searchHint = $('userSearchStatus'), convList = $('conversationList');
+  const chatPane = document.querySelector('.chat-pane');
   const chatAvatar = $('chatAvatar'), chatAvatarIni = $('chatAvatarInitial');
   const chatTitle = $('chatTitle'), chatSubtitle = $('chatSubtitle');
+  const chatBackBtn = $('chatPaneBackBtn');
   const statusBadge = $('statusBadge'), statusText = $('statusText');
   const messagesPane = $('messages'), emptyState = $('emptyState');
   const composerForm = $('composerForm'), textarea = $('messageInput');
@@ -45,13 +49,23 @@
   let me = { username: '', publicId: '', avatarColor: null }, authMode = 'login';
   let authToken = '';
   let conversations = [], active = null, activeSub = null, convSub = null;
+  let hasMessages = false;
   let socket = null, connected = false, connecting = false, disconnecting = false, manualClose = false;
-  let heartbeat = null, stompBuffer = '', lastMsgDate = null, lastSenderId = null, pendingColor = null;
+  let heartbeat = null, stompBuffer = '', lastMsgDate = null, lastSenderId = null, pendingColor = null, pendingInitialColor = '#F8FAFC';
 
   const initial = n => (n || '?').charAt(0).toUpperCase();
   const escHtml = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   function isLightColor(h) { if (!h || h.length < 7) return false; const r = parseInt(h.slice(1, 3), 16), g = parseInt(h.slice(3, 5), 16), b = parseInt(h.slice(5, 7), 16); return (r * 299 + g * 587 + b * 114) / 1000 > 128; }
-  function applyAvatarColor(el, c) { if (c) { el.style.background = c; el.style.borderColor = 'transparent'; el.style.color = isLightColor(c) ? '#13151A' : '#F0F2F5'; } else { el.style.background = el.style.borderColor = el.style.color = ''; } }
+  function applyAvatarColor(el, c, textColor) { if (c) { el.style.background = c; el.style.borderColor = 'transparent'; el.style.color = textColor || (isLightColor(c) ? '#13151A' : '#F0F2F5'); } else { el.style.background = el.style.borderColor = ''; el.style.color = textColor || ''; } }
+  const themes = {
+    aura: { accent: '#E56F7D', accent2: '#F08B69', dim: 'rgba(229,111,125,.10)', mid: 'rgba(229,111,125,.18)', grad: 'linear-gradient(135deg,#D861A7 0%,#E56F7D 45%,#F08B69 72%,#F6D88A 100%)' },
+    ocean: { accent: '#0EA5E9', accent2: '#14B8A6', dim: 'rgba(14,165,233,.10)', mid: 'rgba(14,165,233,.18)', grad: 'linear-gradient(135deg,#2563EB 0%,#0EA5E9 48%,#14B8A6 100%)' },
+    violet: { accent: '#8B5CF6', accent2: '#EC4899', dim: 'rgba(139,92,246,.10)', mid: 'rgba(139,92,246,.18)', grad: 'linear-gradient(135deg,#7C3AED 0%,#8B5CF6 48%,#EC4899 100%)' },
+    forest: { accent: '#16A34A', accent2: '#84CC16', dim: 'rgba(22,163,74,.10)', mid: 'rgba(22,163,74,.18)', grad: 'linear-gradient(135deg,#15803D 0%,#16A34A 50%,#84CC16 100%)' },
+    sunset: { accent: '#F97316', accent2: '#FACC15', dim: 'rgba(249,115,22,.10)', mid: 'rgba(249,115,22,.18)', grad: 'linear-gradient(135deg,#EF4444 0%,#F97316 52%,#FACC15 100%)' }
+  };
+  function applyTheme(name) { const t = themes[name] || themes.aura; const r = document.documentElement.style; r.setProperty('--accent', t.accent); r.setProperty('--accent2', t.accent2); r.setProperty('--accent-dim', t.dim); r.setProperty('--accent-mid', t.mid); r.setProperty('--grad', t.grad); localStorage.setItem('aura.theme', name); themeSwatches?.querySelectorAll('.theme-swatch').forEach(b => b.classList.toggle('is-active', b.dataset.theme === name)); }
+  function applyInitialColor(c) { pendingInitialColor = c || '#F8FAFC'; localStorage.setItem('aura.initialColor', pendingInitialColor); applyAvatarColor(profileAvatar, me.avatarColor, pendingInitialColor); applyAvatarColor(modalAvatar, pendingColor || me.avatarColor, pendingInitialColor); initialColorPicker?.querySelectorAll('button').forEach(b => b.classList.toggle('is-active', b.dataset.initialColor === pendingInitialColor)); }
 
   function toast(msg, type = 'ok', ms = 3000) {
     const normalized = String(msg || '').toLowerCase();
@@ -89,12 +103,19 @@
     throw new Error(res.ok ? 'Unexpected server response.' : 'Server returned an HTML error page. Check the backend URL and server logs.');
   }
 
-  function applyMe(u, p, c) { me = { username: u, publicId: p || '', avatarColor: c || null }; profileName.textContent = u; profilePublicId.textContent = p || '--------'; profileAvatarIni.textContent = initial(u); applyAvatarColor(profileAvatar, c); }
+  function applyMe(u, p, c) { me = { username: u, publicId: p || '', avatarColor: c || null }; profileName.textContent = u; profilePublicId.textContent = p || '--------'; profileAvatarIni.textContent = initial(u); applyAvatarColor(profileAvatar, c, pendingInitialColor); }
 
   function setStatus(l, s) { statusText.textContent = l; statusBadge.className = 'conn-badge' + (s === 'ok' ? ' is-ok' : s === 'err' ? ' is-err' : ''); connectionDot.classList.toggle('is-on', s === 'ok'); }
 
   function showApp() { authScreen.hidden = true; appShell.hidden = false; }
   function showAuth() { appShell.hidden = true; authScreen.hidden = false; emailInput.value = ''; passwordInput.value = ''; usernameInput.value = ''; setAuthMode('login'); setTimeout(() => emailInput.focus(), 60); }
+  function syncChatPaneVisibility() {
+    const mobile = window.innerWidth <= 725;
+    const shouldShow = !mobile || Boolean(active);
+    chatPane?.classList.toggle('is-visible', shouldShow);
+    appShell.classList.toggle('is-mobile-chat-open', mobile && shouldShow);
+    chatPane?.setAttribute('aria-hidden', String(!shouldShow));
+  }
 
   function setAuthHint(m, t = '') { authStatus.textContent = m; authStatus.className = 'auth-hint' + (t ? ' is-' + t : ''); }
   function setAuthMode(mode) {
@@ -138,11 +159,20 @@
   }
 
   function setProfileHint(m, t = '') { profileSaveHint.textContent = m; profileSaveHint.className = 'auth-hint' + (t ? ' is-' + t : ''); }
+  function updateProfilePreview() {
+    const nextName = (profileUsernameInput.value || me.username || 'Your name').trim() || 'Your name';
+    profilePreviewName.textContent = nextName;
+    modalAvatarIni.textContent = initial(nextName);
+    applyAvatarColor(modalAvatar, pendingColor || me.avatarColor, pendingInitialColor);
+  }
   function updateSwatches(c) { colorSwatches.querySelectorAll('.swatch').forEach(s => s.classList.toggle('is-active', s.dataset.color === c)); }
-  function openProfileModal() { profileUsernameInput.value = me.username; pendingColor = me.avatarColor; modalAvatarIni.textContent = initial(me.username); applyAvatarColor(modalAvatar, me.avatarColor); updateSwatches(me.avatarColor); setProfileHint(''); profileModal.hidden = false; setTimeout(() => profileUsernameInput.focus(), 60); }
+  function openProfileModal() { profileUsernameInput.value = me.username; pendingColor = me.avatarColor; updateProfilePreview(); updateSwatches(me.avatarColor); applyInitialColor(pendingInitialColor); setProfileHint(''); profileModal.hidden = false; setTimeout(() => profileUsernameInput.focus(), 60); }
   function closeProfileModal() { profileModal.hidden = true; }
-  colorSwatches.addEventListener('click', e => { const sw = e.target.closest('.swatch'); if (!sw) return; pendingColor = sw.dataset.color; applyAvatarColor(modalAvatar, pendingColor); modalAvatarIni.textContent = initial(profileUsernameInput.value) || initial(me.username); updateSwatches(pendingColor); });
-  profileUsernameInput.addEventListener('input', () => { modalAvatarIni.textContent = initial(profileUsernameInput.value) || initial(me.username); });
+  function syncEmptyState() { emptyState.hidden = Boolean(active && hasMessages); }
+  colorSwatches.addEventListener('click', e => { const sw = e.target.closest('.swatch'); if (!sw) return; pendingColor = sw.dataset.color; updateProfilePreview(); updateSwatches(pendingColor); });
+  initialColorPicker?.addEventListener('click', e => { const btn = e.target.closest('button[data-initial-color]'); if (btn) { applyInitialColor(btn.dataset.initialColor); updateProfilePreview(); } });
+  themeSwatches?.addEventListener('click', e => { const btn = e.target.closest('.theme-swatch'); if (btn) applyTheme(btn.dataset.theme); });
+  profileUsernameInput.addEventListener('input', updateProfilePreview);
   openProfileBtn.addEventListener('click', openProfileModal);
   closeProfileBtn.addEventListener('click', closeProfileModal);
   cancelProfileBtn.addEventListener('click', closeProfileModal);
@@ -161,6 +191,8 @@
       if (!res.ok) throw new Error(data.error || 'Save failed.');
       saveSession(getToken(), data.username, data.publicId, data.avatarColor);
       applyMe(data.username, data.publicId, data.avatarColor);
+      applyInitialColor(pendingInitialColor);
+      updateProfilePreview();
       closeProfileModal(); toast('Profile updated', 'ok'); renderConvList();
     } catch (err) { setProfileHint(err.message, 'error'); }
     finally { saveProfileBtn.disabled = false; saveSpinner.hidden = true; saveBtnLabel.style.opacity = '1'; }
@@ -194,7 +226,8 @@
     active = conv; const o = otherParticipant(conv);
     chatTitle.textContent = o.username; chatSubtitle.textContent = o.publicId;
     chatAvatarIni.textContent = initial(o.username); applyAvatarColor(chatAvatar, o.avatarColor);
-    emptyState.hidden = true; renderConvList(); unsubActive(); clearMessages(); setComposerEnabled(false);
+    hasMessages = false; syncEmptyState(); renderConvList(); unsubActive(); clearMessages(); setComposerEnabled(false);
+    syncChatPaneVisibility();
     try { await loadMessages(conv.id); subActive(); setComposerEnabled(connected); }
     catch { appendSystem('Could not load messages.'); }
   }
@@ -219,14 +252,18 @@
     const res = await authFetch(`${API}/api/chat/conversations/${id}/messages`);
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const h = await readJson(res); clearMessages();
-    if (!Array.isArray(h) || !h.length) { appendSystem('No messages yet. Say hello!'); return; }
-    h.forEach(m => appendMessage(m)); scrollBottom(false);
+    if (!Array.isArray(h) || !h.length) { appendSystem('No messages yet. Say hello!'); hasMessages = false; syncEmptyState(); return; }
+    hasMessages = false;
+    h.forEach(m => appendMessage(m));
+    scrollBottom(false);
+    syncEmptyState();
   }
   function isMine(m) { if (m.senderPublicId && me.publicId) return m.senderPublicId === me.publicId; return senderName(m) === me.username; }
   function senderName(m) { if (!m.sender) return ''; return typeof m.sender === 'string' ? m.sender : (m.sender.username || ''); }
   function appendMessage(msg) {
     const type = (msg.type || 'CHAT').toUpperCase();
     if (type !== 'CHAT') { appendSystem(msg.content || ''); return; }
+    hasMessages = true;
     const mine = isMine(msg), ts = msg.timestamp ? new Date(msg.timestamp) : new Date(), ds = ts.toDateString();
     if (ds !== lastMsgDate) { lastMsgDate = ds; lastSenderId = null; const sep = document.createElement('div'); sep.className = 'date-sep'; sep.textContent = formatDate(ts); messagesPane.appendChild(sep); }
     const sid = mine ? '__me__' : (msg.senderPublicId || senderName(msg)), first = sid !== lastSenderId; lastSenderId = sid;
@@ -239,12 +276,25 @@
     f.appendChild(tm); bub.appendChild(f); row.appendChild(bub); messagesPane.appendChild(row);
   }
   function appendSystem(txt) { const el = document.createElement('div'); el.className = 'msg-system'; const i = document.createElement('div'); i.className = 'msg-system-inner'; i.textContent = txt; el.appendChild(i); messagesPane.appendChild(el); lastSenderId = null; }
-  function clearMessages() { Array.from(messagesPane.children).forEach(c => { if (c !== emptyState) c.remove(); }); lastMsgDate = null; lastSenderId = null; }
+  function clearMessages() { Array.from(messagesPane.children).forEach(c => { if (c !== emptyState) c.remove(); }); lastMsgDate = null; lastSenderId = null; hasMessages = false; syncEmptyState(); }
   function scrollBottom(s = true) { messagesPane.scrollTo({ top: messagesPane.scrollHeight, behavior: s ? 'smooth' : 'instant' }); }
   function formatTime(d) { return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); }
   function formatDate(d) { const diff = Math.floor((new Date() - d) / 86400000); if (diff === 0) return 'Today'; if (diff === 1) return 'Yesterday'; return d.toLocaleDateString([], { month: 'short', day: 'numeric' }); }
 
   function setComposerEnabled(on) { sendBtn.disabled = !on; textarea.disabled = !on; if (on) textarea.focus(); }
+  chatBackBtn?.addEventListener('click', () => {
+    active = null;
+    clearMessages();
+    syncEmptyState();
+    chatTitle.textContent = 'Select a conversation';
+    chatSubtitle.textContent = 'Search a public ID or choose from the sidebar';
+    chatAvatarIni.textContent = '?';
+    applyAvatarColor(chatAvatar, null);
+    setComposerEnabled(false);
+    renderConvList();
+    unsubActive();
+    syncChatPaneVisibility();
+  });
   textarea.addEventListener('input', () => { textarea.style.height = 'auto'; textarea.style.height = Math.min(textarea.scrollHeight, 130) + 'px'; });
   textarea.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doSend(); } });
   composerForm.addEventListener('submit', e => { e.preventDefault(); doSend(); });
@@ -267,8 +317,9 @@
     if (disconnecting) return; disconnecting = true; stopHB(); connecting = false; unsubActive(); unsubConvUpdates();
     if (socket) { if (manual) { manualClose = true; if (socket.readyState === WebSocket.OPEN) try { stompFrame('DISCONNECT', { receipt: 'bye' }); } catch { }; } try { socket.close(); } catch { } socket = null; }
     connected = false; leaveBtn.disabled = true; setComposerEnabled(false); setStatus('Disconnected', '');
-    if (manual) { clearSession(); me = { username: '', publicId: '', avatarColor: null }; conversations = []; active = activeSub = convSub = null; clearMessages(); emptyState.hidden = false; chatTitle.textContent = 'Select a conversation'; chatSubtitle.textContent = 'Search a public ID or choose from the sidebar'; chatAvatarIni.textContent = '?'; chatAvatar.style.background = ''; showAuth(); }
+    if (manual) { clearSession(); me = { username: '', publicId: '', avatarColor: null }; conversations = []; active = activeSub = convSub = null; clearMessages(); syncEmptyState(); chatTitle.textContent = 'Select a conversation'; chatSubtitle.textContent = 'Search a public ID or choose from the sidebar'; chatAvatarIni.textContent = '?'; chatAvatar.style.background = ''; showAuth(); }
     else { if (msg) { appendSystem(msg); toast(msg, 'warn'); } }
+    syncChatPaneVisibility();
     manualClose = false; disconnecting = false;
   }
   leaveBtn.addEventListener('click', async () => {
@@ -284,13 +335,18 @@
   function stopHB() { clearInterval(heartbeat); heartbeat = null; }
 
   document.addEventListener('keydown', e => { if (e.key === 'Escape') { if (!profileModal.hidden) { closeProfileModal(); return; } if (document.activeElement === searchInput) searchInput.blur(); } if (e.key === '/' && !appShell.hidden && document.activeElement !== textarea && document.activeElement !== searchInput) { e.preventDefault(); searchInput.focus(); } });
+  window.addEventListener('resize', syncChatPaneVisibility);
 
   (function init() {
     const source = sessionStorage.getItem('aura.token') ? sessionStorage : localStorage;
+    applyTheme(localStorage.getItem('aura.theme') || 'aura');
+    pendingInitialColor = localStorage.getItem('aura.initialColor') || '#F8FAFC';
     const token = source.getItem('aura.token'), username = source.getItem('aura.username'), publicId = source.getItem('aura.publicId'), avatarColor = source.getItem('aura.avatarColor') || null;
     if (token) saveSession(token, username, publicId, avatarColor);
     if (token && username) { applyMe(username, publicId, avatarColor); showApp(); loadConversations().then(connect); }
     else { showAuth(); }
+    syncChatPaneVisibility();
+    syncEmptyState();
   })();
 
 })();
