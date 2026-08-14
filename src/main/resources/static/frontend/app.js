@@ -81,6 +81,8 @@
     connecting = false,
     disconnecting = false,
     manualClose = false;
+  let presenceSub = null;
+  const presenceByPublicId = new Map();
   let heartbeat = null,
     stompBuffer = "",
     lastMsgDate = null,
@@ -255,6 +257,39 @@
     statusBadge.className =
       "conn-badge" + (s === "ok" ? " is-ok" : s === "err" ? " is-err" : "");
     connectionDot.classList.toggle("is-on", s === "ok");
+  }
+  async function loadPresence(publicId) {
+    if (!publicId) return null;
+
+    try {
+      const res = await authFetch(`${API}/api/presence/${encodeURIComponent(publicId)}`);
+      if (!res.ok) return null;
+
+      const data = await readJson(res);
+      presenceByPublicId.set(data.publicId, data);
+      return data;
+    } catch {
+      return null;
+    }
+  }
+  function isUserOnline(publicId) {
+    return presenceByPublicId.get(publicId)?.online === true;
+  }
+  function renderActivePresence() {
+    if (!active) {
+      setStatus("Select a chat", "");
+      return;
+    }
+
+    const other = otherParticipant(active);
+    const presence = presenceByPublicId.get(other.publicId);
+
+    if (presence?.online) {
+      setStatus("Online", "ok");
+      return;
+    }
+
+    setStatus("Offline", "");
   }
 
   function showApp() {
@@ -521,6 +556,7 @@
     av.className = "avatar avatar--sm";
     av.innerHTML = `<span>${initial(o.username)}</span>`;
     applyAvatarColor(av, o.avatarColor);
+    if (isUserOnline(o.publicId)) av.classList.add("is-online");
     const body = document.createElement("div");
     body.className = "conv-item-body";
     const n = document.createElement("div");
@@ -558,6 +594,8 @@
   async function selectConversation(conv) {
     active = conv;
     const o = otherParticipant(conv);
+    await loadPresence(o.publicId);
+    renderActivePresence();
     chatTitle.textContent = o.username;
     chatSubtitle.textContent = o.publicId;
     chatAvatarIni.textContent = initial(o.username);
@@ -566,6 +604,7 @@
     syncEmptyState();
     renderConvList();
     unsubActive();
+    subPresence();
     clearMessages();
     setComposerEnabled(false);
     syncChatPaneVisibility();
@@ -782,7 +821,8 @@
       socket = new WebSocket(WS);
     } catch {
       connecting = false;
-      setStatus("Disconnected", "err");
+      if (active) renderActivePresence();
+      else setStatus("Select a chat", "");
       return;
     }
     socket.onopen = () =>
@@ -813,20 +853,36 @@
       connecting = false;
       connected = true;
       leaveBtn.disabled = false;
-      setStatus("Connected", "ok");
       startHB();
       stompSend(
         "/app/chat.addUser",
         JSON.stringify({ sender: me.username, type: "JOIN" }),
       );
       subConvUpdates();
+      subPresence();
       if (active) subActive();
       setComposerEnabled(!!active);
-      toast("Connected", "ok", 2000);
+      if (active) renderActivePresence();
+      else setStatus("Select a chat", "");
+      toast("Online", "ok", 2000);
       return;
     }
     if (cmd === "MESSAGE") {
       const dest = hdrs.destination || "";
+      if (dest === "/topic/presence") {
+        try {
+          const presence = JSON.parse(body);
+          presenceByPublicId.set(presence.publicId, presence);
+          renderConvList();
+          if (active) {
+            const other = otherParticipant(active);
+            if (other.publicId === presence.publicId) {
+              renderActivePresence();
+            }
+          }
+        } catch {}
+        return;
+      }
       if (dest === `/topic/users/${me.publicId}/conversations`) {
         try {
           handleConvUpdate(JSON.parse(body));
@@ -852,8 +908,15 @@
   async function handleConvUpdate(conv) {
     const isNew = upsertConversation(conv);
     renderConvList();
-    if (isNew && (!active || active.id !== conv.id))
-      toast(`New message from ${otherParticipant(conv).username}`, "ok");
+
+    if (active && active.id === conv.id) {
+      await loadPresence(otherParticipant(conv).publicId);
+      renderActivePresence();
+    }
+
+    if (isNew && (!active || active.id !== conv.id)) {
+      toast(`New message from ${otherParticipant(conv).username}`, 'ok');
+    }
   }
   function subActive() {
     if (!connected || !active || activeSub) return;
@@ -862,6 +925,20 @@
       id: activeSub,
       destination: `/topic/chat/${active.id}`,
     });
+  }
+  function subPresence() {
+    if (!connected || presenceSub) return;
+    presenceSub = 'sub-presence';
+    stompFrame('SUBSCRIBE', {
+      id: presenceSub,
+      destination: '/topic/presence'
+    });
+  }
+  function unsubPresence() {
+    if (presenceSub) {
+      if (connected) stompFrame('UNSUBSCRIBE', { id: presenceSub });
+      presenceSub = null;
+    }
   }
   function unsubActive() {
     if (activeSub) {
@@ -890,6 +967,7 @@
     connecting = false;
     unsubActive();
     unsubConvUpdates();
+    unsubPresence();
     if (socket) {
       if (manual) {
         manualClose = true;
@@ -906,7 +984,8 @@
     connected = false;
     leaveBtn.disabled = true;
     setComposerEnabled(false);
-    setStatus("Disconnected", "");
+    if (active) renderActivePresence();
+    else setStatus("Select a chat", "");
     if (manual) {
       clearSession();
       me = { username: "", publicId: "", avatarColor: null };

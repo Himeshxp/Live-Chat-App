@@ -607,6 +607,23 @@ textarea {
   box-shadow: 0 0 5px rgba(74, 222, 128, 0.6);
 }
 
+.avatar {
+  position: relative;
+}
+
+.avatar.is-online::after {
+  content: "";
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #4ade80;
+  border: 2px solid var(--bg2);
+  box-shadow: 0 0 0 1px rgba(74, 222, 128, 0.2);
+}
+
 /* Sidebar sections */
 .sidebar-section {
   padding: 12px 10px 0;
