@@ -35,7 +35,7 @@ public class AuthController {
                     .body(Map.of("error", "Too many registration attempts. Please wait 15 minutes."));
         }
         AuthResponse response = authService.register(request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping("/login")

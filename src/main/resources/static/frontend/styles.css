@@ -991,10 +991,16 @@ aside:has(.conv-item.is-active) ~ .chat-pane {
   scroll-behavior: smooth;
 }
 
+.messages-pane:has(.msg-row) > .empty-state,
+.messages-pane:has(.msg-row) > .msg-system {
+  display: none !important;
+}
+
 /* Empty state */
 .empty-state {
   flex: 1;
-  /* display: flex; */
+  display: flex;
+  text-align: center;
   flex-direction: column;
   align-items: center;
   justify-content: center;

@@ -97,6 +97,9 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
         }
 
         String email = authentication.getName();
+        if (destination.equals("/topic/presence")) {
+            return;
+        }
 
         if (destination.startsWith("/topic/chat/")) {
             Integer conversationId = parseTrailingId(destination, "/topic/chat/");
